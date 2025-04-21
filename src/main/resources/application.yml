@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: criar-cenario-testes
+
+  data:
+    mongodb:
+      uri: ${MONGO_URI_LOCAL}
+      database: geradorcenarios
+
+server:
+  port: 8088
