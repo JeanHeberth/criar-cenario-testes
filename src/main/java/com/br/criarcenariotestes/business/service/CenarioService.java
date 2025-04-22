@@ -2,6 +2,7 @@ package com.br.criarcenariotestes.business.service;
 
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
+import com.br.criarcenariotestes.business.integration.OpenAiClient;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
 import com.br.criarcenariotestes.infrastructure.repository.CenarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,32 +15,45 @@ import java.util.List;
 public class CenarioService {
 
     private final CenarioRepository cenarioRepository;
+    private final OpenAiClient openAIClient;
 
 
-    public CenarioResponse gerarCenario(CenarioRequest cenarioRequest) {
+    public CenarioResponse gerarCenario(CenarioRequest request) {
+        String cenarioGerado;
 
-        // Gera o texto do cenário com função isolada
-        String cenarioGerado = montarTextoCenario(
-                cenarioRequest.titulo(),
-                cenarioRequest.regraDeNegocio()
-        );
+        try {
+            cenarioGerado = openAIClient.gerarCenarioIA(
+                    request.titulo(),
+                    request.regraDeNegocio()
+            );
+        } catch (Exception e) {
+            System.err.println("⚠️ Fallback acionado: " + e.getMessage());
+            cenarioGerado = montarTextoCenario(request.titulo(), request.regraDeNegocio());
+        }
 
-        // Cria entidade
         Cenario cenario = new Cenario();
-        cenario.setTitulo(cenarioRequest.titulo());
-        cenario.setRegraDeNegocio(cenarioRequest.regraDeNegocio());
+        cenario.setTitulo(request.titulo());
+        cenario.setRegraDeNegocio(request.regraDeNegocio());
         cenario.setCenarioGerado(cenarioGerado);
 
-        // Salva no MongoDB
         Cenario salvo = cenarioRepository.save(cenario);
 
-        // Retorna a resposta formatada
         return new CenarioResponse(
                 salvo.getId(),
                 salvo.getTitulo(),
                 salvo.getRegraDeNegocio(),
                 salvo.getCenarioGerado()
         );
+    }
+
+    private String montarTextoCenario(String titulo, String regra) {
+        return String.format("""
+                Dado que %s
+                
+                Quando %s
+                
+                Então o sistema deve seguir conforme esperado.
+                """, titulo, regra);
     }
 
     public List<Cenario> listarCenarios() {
@@ -54,14 +68,4 @@ public class CenarioService {
         cenarioRepository.deleteById(id);
     }
 
-    private String montarTextoCenario(String titulo, String regraDeNegocio) {
-        return String.format("""
-        Dado que %s.
-
-        Quando %s.
-
-        Então o sistema deve seguir conforme esperado.
-        """, titulo, regraDeNegocio
-        );
-    }
 }
