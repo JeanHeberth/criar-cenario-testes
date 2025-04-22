@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.controller;
 
+import com.br.criarcenariotestes.business.dto.CenarioRequest;
+import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.service.CenarioService;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
 import lombok.RequiredArgsConstructor;
@@ -15,8 +17,8 @@ public class CenarioController {
     private final CenarioService cenarioService;
 
     @PostMapping
-    public Cenario gerarCenario(@RequestBody Cenario cenario) {
-        return cenarioService.gerarCenario(cenario);
+    public CenarioResponse gerarCenario(@RequestBody CenarioRequest cenarioRequest) {
+        return cenarioService.gerarCenario(cenarioRequest);
     }
 
     @GetMapping
