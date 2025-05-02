@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@CrossOrigin(origins = "http://192.168.1.10:4200",
+        originPatterns = "http://localhost:4200")
 @RestController
 @RequestMapping("/cenario")
 @RequiredArgsConstructor
