@@ -26,8 +26,12 @@ public class OpenAiClient {
     public String gerarCenarioIA(String titulo, String regra) {
         String prompt = String.format(
                 "Crie um cenário de teste BDD no estilo Gherkin. Escreva em português.\n\n" +
-                        "Título: %s\nRegra de negócio: %s\n\n" +
-                        "Retorne apenas o cenário formatado no estilo:\nDado que ...\nQuando ...\nEntão ...",
+                        "Título: %s\n" +
+                        "Regra de negócio: %s\n\n " +
+                        "Retorne apenas o cenário formatado no estilo:\n" +
+                        "Dado que ...\n " +
+                        "Quando ...\n " +
+                        "Então ...",
                 titulo, regra);
 
         log.info("🔑 API KEY configurada: {}", config.getApiKey() != null && !config.getApiKey().isBlank() ? "OK" : "FALTANDO!");
