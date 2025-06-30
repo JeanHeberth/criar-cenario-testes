@@ -4,7 +4,7 @@ spring:
 
   data:
     mongodb:
-      uri: ${MONGO_URI_LOCAL}
+      uri: ${MONGO_URI_NUVEM}
       database: geradorcenarios
 
 server:
