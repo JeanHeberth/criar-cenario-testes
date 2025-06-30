@@ -20,7 +20,7 @@ public class CenarioController {
 
     @PostMapping
     public CenarioResponse gerarCenario(@RequestBody CenarioRequest cenarioRequest) {
-        return cenarioService.gerarCenario(cenarioRequest);
+        return cenarioService.gerarCenarioUnificado(cenarioRequest);
     }
 
     @GetMapping

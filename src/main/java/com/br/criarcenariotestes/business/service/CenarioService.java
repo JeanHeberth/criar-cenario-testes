@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -17,24 +18,28 @@ public class CenarioService {
     private final CenarioRepository cenarioRepository;
     private final OpenAiClient openAIClient;
 
-
-    public CenarioResponse gerarCenario(CenarioRequest request) {
-        String cenarioGerado;
+    public CenarioResponse gerarCenarioUnificado(CenarioRequest request) {
+        List<String> cenariosGerados;
 
         try {
-            cenarioGerado = openAIClient.gerarCenarioIA(
+            cenariosGerados = openAIClient.gerarCenariosIA(
                     request.titulo(),
                     request.regraDeNegocio()
             );
         } catch (Exception e) {
             System.err.println("⚠️ Fallback acionado: " + e.getMessage());
-            cenarioGerado = montarTextoCenario(request.titulo(), request.regraDeNegocio());
+            cenariosGerados = montarCenariosFallback(request.titulo(), request.regraDeNegocio());
         }
+
+        // Junta todos os cenários em um único texto com separador visível
+        String cenarioCompleto = cenariosGerados.stream()
+                .map(String::trim)
+                .collect(Collectors.joining("\n\n"));
 
         Cenario cenario = new Cenario();
         cenario.setTitulo(request.titulo());
         cenario.setRegraDeNegocio(request.regraDeNegocio());
-        cenario.setCenarioGerado(cenarioGerado);
+        cenario.setCenarioGerado(cenarioCompleto);
 
         Cenario salvo = cenarioRepository.save(cenario);
 
@@ -46,14 +51,13 @@ public class CenarioService {
         );
     }
 
-    private String montarTextoCenario(String titulo, String regra) {
-        return String.format("""
-                Dado que %s
-                
-                Quando %s
-                
-                Então o sistema deve seguir conforme esperado.
-                """, titulo, regra);
+
+    private List<String> montarCenariosFallback(String titulo, String regra) {
+        return List.of(
+                String.format("Dado que %s, Quando %s, Então o sistema deve validar corretamente.", titulo, regra),
+                String.format("Dado que o usuário está %s, Quando ele realiza %s, Então deve ocorrer a validação.", titulo, regra),
+                String.format("Dado que uma pré-condição é %s, Quando %s acontece, Então o sistema deve reagir conforme a regra.", titulo, regra)
+        );
     }
 
     public List<Cenario> listarCenarios() {
@@ -67,5 +71,4 @@ public class CenarioService {
     public void excluirCenario(String id) {
         cenarioRepository.deleteById(id);
     }
-
 }
