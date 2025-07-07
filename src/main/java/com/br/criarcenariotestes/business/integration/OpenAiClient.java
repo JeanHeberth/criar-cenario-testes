@@ -35,7 +35,7 @@ public class OpenAiClient {
                 2. cenários possíveis de teste cobrindo fluxo principal, alternativo e exceções.
                 
                 Escreva em português, de forma clara, concisa e profissional.
-                Estruture o conteúdo conforme o modelo abaixo:
+                Estruture com formato markdown e apresente o conteúdo conforme o modelo abaixo:
                 
                 
                 

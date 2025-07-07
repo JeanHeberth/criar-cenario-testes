@@ -91,6 +91,7 @@ public class CenarioService {
 
 
 
+
     private List<String> montarCenariosFallback(String titulo, String regra) {
         return List.of(
                 String.format("Dado que %s, Quando %s, Então o sistema deve validar corretamente.", titulo, regra),
