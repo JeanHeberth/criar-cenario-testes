@@ -1,22 +1,20 @@
-# Etapa 1: Build com ./gradlew
-FROM eclipse-temurin:21-jdk-alpine AS build
-WORKDIR /app
+# Etapa de build
+FROM gradle:8.6.0-jdk21 AS build
 
-# Copia arquivos do projeto (incluindo o wrapper)
+WORKDIR /app
 COPY . .
 
-# Dá permissão de execução ao gradlew
-RUN chmod +x ./gradlew
-
-# Executa build (gera .jar)
+# Gera o .jar usando bootJar (usado com Spring Boot plugin)
 RUN gradle bootJar --no-daemon
 
-# Etapa 2: imagem final
-FROM eclipse-temurin:21-jdk-alpine
+# Etapa de execução (imagem mais leve)
+FROM eclipse-temurin:21-jdk
 WORKDIR /app
 
-# Copia o jar gerado da etapa anterior
+# Copia o .jar gerado para a imagem final
 COPY --from=build /app/build/libs/*.jar app.jar
 
 EXPOSE 8089
-ENTRYPOINT ["java", "-Djna.library.path=/usr/lib/x86_64-linux-gnu/", "-jar", "app.jar"]
+
+# Executa a aplicação
+ENTRYPOINT ["java", "-jar", "app.jar"]
