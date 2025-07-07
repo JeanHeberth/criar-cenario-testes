@@ -1,12 +1,22 @@
-# Etapa 1: build do projeto
-FROM gradle:8.5-jdk17 AS build
+# Etapa 1: Build com ./gradlew
+FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
-COPY --chown=gradle:gradle . .
-RUN gradle build -x test
 
-# Etapa 2: imagem leve com JDK
-FROM eclipse-temurin:17-jdk-alpine
+# Copia arquivos do projeto (incluindo o wrapper)
+COPY . .
+
+# Dá permissão de execução ao gradlew
+RUN chmod +x ./gradlew
+
+# Executa build (gera .jar)
+RUN ./gradlew clean build -x test
+
+# Etapa 2: imagem final
+FROM eclipse-temurin:21-jdk-alpine
 WORKDIR /app
+
+# Copia o jar gerado da etapa anterior
 COPY --from=build /app/build/libs/*.jar app.jar
+
 EXPOSE 8089
 CMD ["java", "-jar", "app.jar"]
