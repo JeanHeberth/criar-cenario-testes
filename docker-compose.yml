@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+    ports:
+      - "8089:8089"
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI_NUVEM=${MONGO_URI_NUVEM}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - rede-app
+
+  frontend:
+    build:
+      context: ../gerar-cenario-teste-app
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+    networks:
+      - rede-app
+
+networks:
+  rede-app:
+    driver: bridge
