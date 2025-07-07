@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -16,7 +14,7 @@ services:
 
   frontend:
     build:
-      context: ../gerar-cenario-teste-app
+      context: ../../FrontEnd/gerar-cenario-teste-app
     ports:
       - "4200:80"
     depends_on:
