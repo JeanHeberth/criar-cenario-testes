@@ -9,7 +9,7 @@ COPY . .
 RUN chmod +x ./gradlew
 
 # Executa build (gera .jar)
-RUN ./gradlew clean build -x test
+RUN gradle bootJar --no-daemon
 
 # Etapa 2: imagem final
 FROM eclipse-temurin:21-jdk-alpine
@@ -19,4 +19,4 @@ WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
 EXPOSE 8089
-CMD ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Djna.library.path=/usr/lib/x86_64-linux-gnu/", "-jar", "app.jar"]
