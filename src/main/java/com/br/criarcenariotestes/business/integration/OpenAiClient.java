@@ -25,20 +25,37 @@ public class OpenAiClient {
     private final ObjectMapper mapper = new ObjectMapper();
 
     /**
-     * Novo método: gera vários cenários (por padrão 5).
+     * Novo método: gera vários cenários.
      */
-    public List<String> gerarCenariosIA(String titulo, String regra) {
-        String prompt = String.format(
-                "Gere cenários possíveis, e me informe a quantidade de cenários. Crie um cenário de teste BDD no estilo Gherkin com base nas informações abaixo. Escreva em português.\n\n" +
-                        "Título: %s\n" +
-                        "Regra de negócio: %s\n\n" +
-                        "Cada cenário deve seguir o formato:\n" +
-                        "Dado que ...\n" +
-                        "Quando ...\n" +
-                        "Então ...\n\n" +
-                        "Separe cada cenário com duas quebras de linha.",
-                titulo, regra
-        );
+    public String gerarCenariosIA(String titulo, String regra) {
+        String prompt = String.format("""
+                Você é um analista de testes sênior. Com base no título e na regra de negócio abaixo, gere:
+                
+                1. Critérios de aceitação claros e objetivos, numerados (ex: CA1, CA2...)
+                2. cenários possíveis de teste cobrindo fluxo principal, alternativo e exceções.
+                
+                Escreva em português, de forma clara, concisa e profissional.
+                Estruture com formato markdown e apresente o conteúdo conforme o modelo abaixo:
+                
+                
+                
+                Título: Cadastrar Usuário.
+                Regra de Negócio: O sistema deve permitir o cadastro de novos usuários com e-mail único.
+                
+                
+                Cenários de Teste:
+                
+                Cenário 1 -
+
+                ---
+
+                Cenário 2 -
+
+                ---
+                
+                Título: %s  
+                Regra de Negócio: %s
+                """, titulo, regra);
 
         String respostaCompleta = enviarPrompt(prompt);
 
@@ -53,7 +70,7 @@ public class OpenAiClient {
             }
         }
 
-        return cenarios;
+        return respostaCompleta;
     }
 
     /**
