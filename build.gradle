@@ -30,6 +30,8 @@ ext {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+    implementation 'io.github.cdimascio:dotenv-java:2.3.2'
+
     implementation 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
