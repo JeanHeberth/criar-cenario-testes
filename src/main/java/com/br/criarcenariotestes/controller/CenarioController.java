@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@CrossOrigin(origins = "http://192.168.1.10:4200",
+@CrossOrigin(origins = "http://192.168.0.198:4200",
         originPatterns = "http://localhost:4200")
 @RestController
 @RequestMapping("/cenario")
@@ -20,7 +20,7 @@ public class CenarioController {
 
     @PostMapping
     public CenarioResponse gerarCenario(@RequestBody CenarioRequest cenarioRequest) {
-        return cenarioService.gerarCenario(cenarioRequest);
+        return cenarioService.gerarCenarioCompleto(cenarioRequest);
     }
 
     @GetMapping
