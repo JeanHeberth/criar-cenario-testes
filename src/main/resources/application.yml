@@ -11,6 +11,7 @@ server:
   port: 8089
   address: 0.0.0.0
 
+
 openai:
   api-key: ${OPENAI_API_KEY}
   model: gpt-4.1
