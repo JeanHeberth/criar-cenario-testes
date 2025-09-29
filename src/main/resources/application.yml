@@ -8,7 +8,6 @@ spring:
       database: geradorcenarios
 
 server:
-  port: 8089
   address: 0.0.0.0
 
 
