@@ -29,38 +29,51 @@ public class OpenAiClient {
      */
     public String gerarCenariosIA(String titulo, String regra) {
         String prompt = String.format("""
-                Você é um analista de testes sênior. Com base no título e na regra de negócio abaixo, gere:
-                
-                1. Critérios de aceitação claros e objetivos, numerados (ex: CA1, CA2...)
-                2. cenários possíveis de teste cobrindo fluxo principal, alternativo e exceções.
-                
-                Escreva em português, de forma clara, concisa e profissional.
-                Estruture com formato markdown e apresente o conteúdo conforme o modelo abaixo:
-                
-                
-                
-                Título: Cadastrar Usuário.
-                Regra de Negócio: O sistema deve permitir o cadastro de novos usuários com e-mail único.
-                
-                
-                Cenários de Teste:
-                
-                Cenário 1 -
+Você é um analista de testes experiente.
 
-                ---
+Com base no título e regra de negócio abaixo, gere múltiplos cenários de teste funcionais cobrindo o fluxo principal, alternativo e exceções.
 
-                Cenário 2 -
+Para **cada cenário**, produza uma linha com os seguintes campos (em português):
 
-                ---
-                
-                Título: %s  
-                Regra de Negócio: %s
-                """, titulo, regra);
+1. Nome do cenário
+2. Objetivo
+3. Pré-condição
+4. Passos (começando com "Dado que...", "E...", "Quando...")
+5. Resultado esperado (começando com "Então...", "E...")
+6. Componente
+7. Rótulos (palavras-chave separadas por vírgula)
+8. Propósito
+9. Pasta
+10. Proprietário
+11. Cobertura (em formato #1234)
+12. Status (Aguardando execução)
+
+Use o seguinte formato para cada linha:
+
+Nome: ...
+Objetivo: ...
+Precondição: ...
+Script de Teste (Passo-a-Passo): ...
+Script de Teste (Passo-a-Passo) - Resultado: ...
+Componente: ...
+Rótulos: ...
+Propósito: ...
+Pasta: ...
+Proprietário: ...
+Cobertura: ...
+Status: ...
+
+Título: %s
+Regra de negócio: %s
+
+Responda com múltiplos blocos (um por cenário).
+""", titulo, regra);
+
 
         String respostaCompleta = enviarPrompt(prompt);
 
-        // Divide os blocos por duas quebras de linha
-        String[] blocos = respostaCompleta.split("\\n\\n+");
+        // Divide os blocos por separador '---'
+        String[] blocos = respostaCompleta.split("---");
         List<String> cenarios = new ArrayList<>();
 
         for (String bloco : blocos) {
