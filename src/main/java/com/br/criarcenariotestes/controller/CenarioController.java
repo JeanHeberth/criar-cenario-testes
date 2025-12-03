@@ -14,6 +14,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CenarioController {
 
+
     private final CenarioService cenarioService;
 
     @PostMapping
