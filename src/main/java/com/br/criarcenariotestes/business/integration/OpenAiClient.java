@@ -87,6 +87,7 @@ public class OpenAiClient {
             }
         }
 
+
         return respostaCompleta;
     }
 
