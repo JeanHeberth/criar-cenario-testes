@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Getter
 @Setter
 @Configuration
-@ConfigurationProperties(prefix = "openai")
+@ConfigurationProperties(prefix = "gemini")
 public class OpenAiConfig {
     private String apiKey;
     private String model;

@@ -11,11 +11,16 @@ server:
   address: 0.0.0.0
   port: 8089
 
+# Sugestão de alteração (melhor prática de nome)
+gemini:
+  api-key: ${GEMINI_API_KEY}
+  model: gemini-2.5-flash # Modelo recomendado para tarefas de texto estruturado
+  url: https://generativelanguage.googleapis.com/v1/models/{model}:generateContent
 
-openai:
-  api-key: ${OPENAI_API_KEY}
-  model: gpt-4.1
-  url: https://api.openai.com/v1/chat/completions
+#openai:
+#  api-key: ${OPENAI_API_KEY}
+#  model: gpt-4.1
+#  url: https://api.openai.com/v1/chat/completions
 
 
 
