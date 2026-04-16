@@ -132,7 +132,7 @@ Para **cada cenário**, use a estrutura e os campos obrigatórios abaixo (em por
 Nome: [Nome do Cenário (Claro e Descritivo)]
 Objetivo: [Descrição concisa do que o teste valida]
 Precondição: [O estado inicial do sistema ou dados necessários]
-Script de Teste (Passo-a-Passo): [Os passos Gherkin: Dado que... Quando... Então...]
+Script de Teste (Passo-a-Passo): [Os passos Gherkin: Dado que... Quando...]
 Script de Teste (Passo-a-Passo) - Resultado: [O resultado esperado, começando com "Então..."]
 Componente: [O módulo ou funcionalidade principal]
 Rótulos: [Palavras-chave separadas por vírgula (ex: Regressão, FluxoPrincipal, Erro)]
@@ -173,7 +173,6 @@ Responda APENAS com os blocos de cenários formatados.
     private String enviarPrompt(String prompt) {
         log.info("🔑 API KEY configurada: {}", config.getApiKey() != null && !config.getApiKey().isBlank() ? "OK" : "FALTANDO!");
         log.info("📡 Enviando requisição para: {}", config.getUrl());
-//        log.info("🧠 Prompt:\n{}", prompt);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
