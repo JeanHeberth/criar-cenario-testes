@@ -29,16 +29,100 @@ public class OpenAiClient {
      */
     public String gerarCenariosIA(String titulo, String regra) {
         String prompt = String.format("""
-Você é um Analista de Testes Sênior e especialista na metodologia BDD.
+# CONTEXTO
+Você atua dentro de um fluxo real de desenvolvimento, onde:
+- Os cenários serão usados em produção
+- O sistema está próximo do deploy
+- Existe risco real de falhas
+- O foco é PREVENÇÃO de incidentes
 
-Sua tarefa é gerar **múltiplos cenários de teste funcionais** (fluxo principal, alternativo e exceções) cobrindo a regra de negócio e o título fornecidos.
+# OBJETIVO
+Gerar:
+1. Plano Macro de Teste (PMT)
+2. Cenários de Teste estruturados no padrão Zephyr
 
-### Diretrizes BDD e de Qualidade
-1.  **Foco Comportamental:** Os cenários devem focar no **comportamento do sistema** do ponto de vista do usuário/negócio.
-2.  **Passos Gherkin (DSL):** Os passos 'Dado/Quando/Então' devem ser escritos em um nível de **linguagem de domínio** (negócio), e não em passos de interface de usuário (clicar em botão, digitar).
-3.  **Passos Claros:** Certifique-se de que a cláusula 'Quando' descreva a ação que dispara o comportamento, e a cláusula 'Então' descreva o resultado observável esperado.
-4.  **Pré-Condição:** A 'Pré-condição' deve descrever o estado inicial do sistema e/ou os dados necessários para a execução do teste.
-5.  **Variedade:** Garanta pelo menos 1 cenário de Sucesso (Fluxo Principal), 1 de Alternativa (Variação/Edge Case) e 1 de Exceção (Erro/Validação).
+---
+
+# REGRAS OBRIGATÓRIAS
+
+## SOBRE OS CENÁRIOS
+- Não gerar cenários genéricos
+- Focar em risco real de produção
+- Cobrir:
+  - Fluxo principal
+  - Variações (edge cases)
+  - Erros e validações
+  - Concorrência e inconsistência
+
+## BDD (OBRIGATÓRIO)
+- Usar: Dado, Quando, Então
+- Nunca repetir palavras-chave
+- Usar "E" para continuidade
+
+Exemplo:
+Dado que o usuário possui cadastro válido
+E possui saldo disponível
+Quando solicita saque
+Então o sistema processa a operação
+E registra a transação
+
+---
+
+# SAÍDA ESPERADA
+
+## 1. PLANO MACRO DE TESTE
+
+Dividir em:
+
+- Preparação de dados
+- Execução do fluxo principal (tabela de inputs)
+- Testes exploratórios e regressão
+- Critérios de aceite
+
+---
+
+## 2. CENÁRIOS (FORMATO ZEPHYR)
+
+Para cada cenário:
+
+Título:
+Objetivo:
+Precondição:
+
+BDD:
+Dado que...
+E ...
+Quando ...
+E ...
+Então ...
+E ...
+
+Resultado Esperado:
+
+---
+
+## 3. CONSIDERAÇÕES
+
+Apontar:
+- Ambiguidades
+- Riscos técnicos
+- Impacto em APIs
+- Problemas de dados
+
+---
+
+# ESTILO
+- Técnico
+- Direto
+- Sem explicações desnecessárias
+- Usar tabela quando necessário
+
+# IMPORTANTE
+Responder APENAS com:
+- PMT
+- Cenários
+- Considerações
+
 
 ### Formato de Saída
 Você deve gerar **múltiplos blocos**, um para cada cenário. Cada bloco deve ser **separado por três hífens (---)**.
@@ -89,7 +173,7 @@ Responda APENAS com os blocos de cenários formatados.
     private String enviarPrompt(String prompt) {
         log.info("🔑 API KEY configurada: {}", config.getApiKey() != null && !config.getApiKey().isBlank() ? "OK" : "FALTANDO!");
         log.info("📡 Enviando requisição para: {}", config.getUrl());
-        log.info("🧠 Prompt:\n{}", prompt);
+//        log.info("🧠 Prompt:\n{}", prompt);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
