@@ -1,117 +1,114 @@
 package com.br.criarcenariotestes.business.service;
 
+import com.br.criarcenariotestes.business.ai.AiProvider;
+import com.br.criarcenariotestes.business.ai.AiProviderResolver;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
-import com.br.criarcenariotestes.business.integration.OpenAiClient;
+import com.br.criarcenariotestes.business.fallback.CenarioFallbackFactory;
+import com.br.criarcenariotestes.business.parser.CenarioTextoParser;
+import com.br.criarcenariotestes.business.prompt.PromptFactory;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
+import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import com.br.criarcenariotestes.infrastructure.repository.CenarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class CenarioService {
 
+    private static final int MAX_TENTATIVAS = 2;
+    private static final long TEMPO_ESPERA_MS = 2000L;
+
     private final CenarioRepository cenarioRepository;
-    private final OpenAiClient openAIClient;
+    private final AiProviderResolver aiProviderResolver;
+    private final CenarioTextoParser cenarioTextoParser;
+    private final CenarioFallbackFactory fallbackFactory;
 
     public CenarioResponse gerarCenarioCompleto(CenarioRequest request) {
-        String resposta;
+        String systemPrompt = PromptFactory.getSystemPrompt();
+        String userPrompt = PromptFactory.getUserPrompt(request.titulo(), request.regraDeNegocio());
 
         try {
-            resposta = openAIClient.gerarCenariosIA(
-                    request.titulo(),
-                    request.regraDeNegocio()
-            );
+            AiProvider provider = aiProviderResolver.getActiveProvider();
+            String resposta = tentarComRetry(provider, systemPrompt, userPrompt);
+            return salvarResposta(request, resposta);
         } catch (Exception e) {
-            System.err.println("⚠️ Fallback acionado: " + e.getMessage());
-            return gerarFallback(request);
+            System.err.println("⚠️ Provider principal falhou: " + e.getMessage());
         }
 
-        // Parse da resposta
-        String criterios = extrairSecao(resposta, "Critérios de Aceitação:", "Cenários de Teste:");
-        List<String> cenariosList = extrairBlocos(resposta, "Cenário");
+        try {
+            AiProvider fallbackProvider = aiProviderResolver.getFallbackProvider();
+            String resposta = tentarComRetry(fallbackProvider, systemPrompt, userPrompt);
+            return salvarResposta(request, resposta);
+        } catch (Exception e) {
+            System.err.println("⚠️ Provider fallback falhou: " + e.getMessage());
+        }
+
+        return salvarFallback(request);
+    }
+
+    private String tentarComRetry(AiProvider provider, String systemPrompt, String userPrompt) {
+        Exception ultimaExcecao = null;
+
+        for (int tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+            try {
+                return provider.gerarResposta(systemPrompt, userPrompt);
+            } catch (Exception e) {
+                ultimaExcecao = e;
+
+                if (tentativa < MAX_TENTATIVAS) {
+                    aguardar();
+                }
+            }
+        }
+
+        throw new RuntimeException("Todas as tentativas falharam para " + provider.getName(), ultimaExcecao);
+    }
+
+    private CenarioResponse salvarResposta(CenarioRequest request, String respostaIa) {
+        List<CenarioItem> itens = cenarioTextoParser.parsear(respostaIa);
+
+        if (itens.isEmpty()) {
+            return salvarFallback(request);
+        }
 
         Cenario cenario = new Cenario();
         cenario.setTitulo(request.titulo());
         cenario.setRegraDeNegocio(request.regraDeNegocio());
-        cenario.setCriteriosAceitacao(criterios);
-        cenario.setCenarios(cenariosList);
+        cenario.setCriteriosAceitacao(cenarioTextoParser.extrairCriterios(respostaIa));
+        cenario.setCenarios(itens);
 
         Cenario salvo = cenarioRepository.save(cenario);
+        return toResponse(salvo);
+    }
 
+    private CenarioResponse salvarFallback(CenarioRequest request) {
+        Cenario cenario = fallbackFactory.criar(request);
+        Cenario salvo = cenarioRepository.save(cenario);
+        return toResponse(salvo);
+    }
+
+    private CenarioResponse toResponse(Cenario cenario) {
         return new CenarioResponse(
-                salvo.getId(),
-                salvo.getTitulo(),
-                salvo.getRegraDeNegocio(),
-                salvo.getCriteriosAceitacao(),
-                salvo.getCenarios()
+                cenario.getId(),
+                cenario.getTitulo(),
+                cenario.getRegraDeNegocio(),
+                cenario.getCriteriosAceitacao(),
+                cenario.getCenarios()
         );
     }
 
-
-    private String extrairSecao(String texto, String inicio, String fim) {
-        int idxInicio = texto.indexOf(inicio);
-        int idxFim = texto.indexOf(fim);
-
-        if (idxInicio != -1 && idxFim != -1 && idxInicio < idxFim) {
-            return texto.substring(idxInicio + inicio.length(), idxFim).trim();
+    private void aguardar() {
+        try {
+            Thread.sleep(TEMPO_ESPERA_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Retry interrompido", e);
         }
-        return "";
     }
-
-    private List<String> extrairBlocos(String texto, String prefixo) {
-        String[] linhas = texto.split("\\n");
-        List<String> blocos = new ArrayList<>();
-        StringBuilder atual = new StringBuilder();
-
-        for (String linha : linhas) {
-            if (linha.trim().toLowerCase().startsWith(prefixo.toLowerCase())) {
-                if (!atual.isEmpty()) {
-                    blocos.add(atual.toString().trim());
-                    atual = new StringBuilder();
-                }
-            }
-            atual.append(linha).append("\n");
-        }
-
-        if (!atual.isEmpty()) {
-            blocos.add(atual.toString().trim());
-        }
-
-        // remove blocos que contenham "Critérios de Aceitação:"
-        return blocos.stream()
-                .filter(b -> !b.toLowerCase().contains("critério de aceitação"))
-                .toList();
-    }
-
-
-
-
-    private List<String> montarCenariosFallback(String titulo, String regra) {
-        return List.of(
-                String.format("Dado que %s, Quando %s, Então o sistema deve validar corretamente.", titulo, regra),
-                String.format("Dado que o usuário está %s, Quando ele realiza %s, Então deve ocorrer a validação.", titulo, regra),
-                String.format("Dado que uma pré-condição é %s, Quando %s acontece, Então o sistema deve reagir conforme a regra.", titulo, regra)
-        );
-    }
-
-    private CenarioResponse gerarFallback(CenarioRequest request) {
-        List<String> cenarios = montarCenariosFallback(request.titulo(), request.regraDeNegocio());
-
-        return new CenarioResponse(
-                null,
-                request.titulo(),
-                request.regraDeNegocio(),
-                "CA1: O sistema deve funcionar mesmo sem resposta da IA.",
-                cenarios
-        );
-    }
-
 
     public List<Cenario> listarCenarios() {
         return cenarioRepository.findAll();
@@ -124,5 +121,4 @@ public class CenarioService {
     public void excluirCenario(String id) {
         cenarioRepository.deleteById(id);
     }
-
 }
