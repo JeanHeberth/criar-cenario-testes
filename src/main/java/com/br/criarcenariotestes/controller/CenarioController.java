@@ -28,12 +28,12 @@ public class CenarioController {
     }
 
     @GetMapping("/{id}")
-    public Cenario buscarCenario(String id) {
+    public Cenario buscarCenario(@PathVariable String id) {
         return cenarioService.buscarCenario(id);
     }
 
     @DeleteMapping("/{id}")
-    public void excluirCenario(String id) {
+    public void excluirCenario(@PathVariable String id) {
         cenarioService.excluirCenario(id);
     }
 }
