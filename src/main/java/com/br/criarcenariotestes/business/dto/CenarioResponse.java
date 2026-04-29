@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.dto;
 
+import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
+
 import java.util.List;
 
 public record CenarioResponse(
@@ -7,5 +9,5 @@ public record CenarioResponse(
         String titulo,
         String regraDeNegocio,
         String criteriosAceitacao,
-        List<String> cenarios
+        List<CenarioItem> cenarios
 ) {}
