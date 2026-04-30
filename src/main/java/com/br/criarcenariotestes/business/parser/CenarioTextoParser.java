@@ -32,11 +32,12 @@ public class CenarioTextoParser {
                     .precondicao(extrairCampo(texto, "Precondição"))
                     .scriptTeste(extrairCampo(texto, "Script de Teste \\(Passo-a-Passo\\)"))
                     .resultadoEsperado(extrairCampo(texto, "Script de Teste \\(Passo-a-Passo\\) - Resultado"))
+                    .variaveis(valorOuPadrao(extrairCampo(texto, "Variáveis"), "Não se aplica"))
                     .componente(extrairCampo(texto, "Componente"))
                     .rotulos(extrairCampo(texto, "Rótulos"))
                     .proposito(valorOuPadrao(extrairCampo(texto, "Propósito"), "TESTE MANUAL"))
                     .pasta(extrairCampo(texto, "Pasta"))
-                    .proprietario(valorOuPadrao(extrairCampo(texto, "Proprietário"), "JIRAUSER23105"))
+                    .proprietario("JIRAUSER23105")
                     .cobertura(extrairCampo(texto, "Cobertura"))
                     .status(valorOuPadrao(extrairCampo(texto, "Status"), "APPROVED"))
                     .build();
@@ -60,6 +61,7 @@ public class CenarioTextoParser {
                 "Precondição",
                 "Script de Teste \\(Passo-a-Passo\\)",
                 "Script de Teste \\(Passo-a-Passo\\) - Resultado",
+                "Variáveis",
                 "Componente",
                 "Rótulos",
                 "Propósito",
