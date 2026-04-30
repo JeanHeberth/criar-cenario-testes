@@ -125,24 +125,43 @@ public class CenarioService {
     public void excluirCenario(String id) {
         cenarioRepository.deleteById(id);
     }
-    public CenarioResponse gerarCenarioComPdf(String titulo, String regra, MultipartFile arquivo) {
 
-        String textoPdf;
-        try {
-            textoPdf = pdfTextExtractor.extrairTexto(arquivo.getInputStream());
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao processar PDF", e);
+    public CenarioResponse gerarCenarioComPdf(
+            String titulo,
+            String regra,
+            List<MultipartFile> arquivos
+    ) {
+
+        StringBuilder contextoCompleto = new StringBuilder();
+
+        for (MultipartFile arquivo : arquivos) {
+            try {
+                String texto = pdfTextExtractor.extrairTexto(arquivo.getInputStream());
+
+                contextoCompleto.append("\n\n### DOCUMENTO: ")
+                        .append(arquivo.getOriginalFilename())
+                        .append("\n")
+                        .append(texto);
+
+            } catch (Exception e) {
+                throw new RuntimeException("Erro ao processar PDF: " + arquivo.getOriginalFilename(), e);
+            }
         }
 
         String systemPrompt = PromptFactory.getSystemPrompt();
-        String userPrompt = PromptFactory.getUserPromptComContexto(titulo, regra, textoPdf);
+        String userPrompt = PromptFactory.getUserPromptComContexto(
+                titulo,
+                regra,
+                contextoCompleto.toString()
+        );
 
+        // segue fluxo normal (provider + fallback)
         try {
             AiProvider provider = aiProviderResolver.getActiveProvider();
             String resposta = tentarComRetry(provider, systemPrompt, userPrompt);
             return salvarResposta(new CenarioRequest(titulo, regra), resposta);
         } catch (Exception e) {
-            System.err.println("⚠️ Falha com provider principal: " + e.getMessage());
+            System.err.println("⚠️ Provider principal falhou: " + e.getMessage());
         }
 
         try {
@@ -150,7 +169,7 @@ public class CenarioService {
             String resposta = tentarComRetry(fallbackProvider, systemPrompt, userPrompt);
             return salvarResposta(new CenarioRequest(titulo, regra), resposta);
         } catch (Exception e) {
-            System.err.println("⚠️ Falha com fallback: " + e.getMessage());
+            System.err.println("⚠️ Provider fallback falhou: " + e.getMessage());
         }
 
         return salvarFallback(new CenarioRequest(titulo, regra));
