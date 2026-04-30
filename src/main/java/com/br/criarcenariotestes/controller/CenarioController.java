@@ -5,7 +5,9 @@ import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.service.CenarioService;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -35,5 +37,14 @@ public class CenarioController {
     @DeleteMapping("/{id}")
     public void excluirCenario(@PathVariable String id) {
         cenarioService.excluirCenario(id);
+    }
+
+    @PostMapping(value = "/com-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CenarioResponse gerarComPdf(
+            @RequestParam String titulo,
+            @RequestParam String regraDeNegocio,
+            @RequestParam MultipartFile arquivo
+    ) {
+        return cenarioService.gerarCenarioComPdf(titulo, regraDeNegocio, arquivo);
     }
 }
