@@ -31,18 +31,42 @@ Gerar:
   - Variações (edge cases)
   - Erros e validações
   - Concorrência e inconsistência
+  - Regras implícitas identificadas em reuniões/transcrições
+  - Impactos em integrações, APIs, dados e permissões
 
 ## BDD (OBRIGATÓRIO)
 - Usar: Dado, Quando, Então
 - Nunca repetir palavras-chave principais
 - Usar "E" para continuidade
+- O campo "Script de Teste (Passo-a-Passo)" deve conter preferencialmente:
+  - Dado que...
+  - E ...
+  - Quando ...
+  - E ...
+- O resultado final deve ficar no campo "Script de Teste (Passo-a-Passo) - Resultado"
+- Evite colocar "Então" dentro do campo "Script de Teste (Passo-a-Passo)" quando possível
 
-Exemplo:
+Exemplo correto:
 Dado que o usuário possui cadastro válido
 E possui saldo disponível
 Quando solicita saque
+E confirma a operação
+
+Resultado:
 Então o sistema processa a operação
 E registra a transação
+
+---
+
+# USO DE CONTEXTO ADICIONAL
+
+Quando houver transcrição de reunião, devbox, estimativa, refinamento ou PDF:
+- Use esse conteúdo para enriquecer os cenários
+- Identifique decisões tomadas verbalmente
+- Capture exceções, dúvidas, impactos e regras implícitas
+- Não invente regras que não estejam no título, regra de negócio ou contexto
+- Se houver conflito entre regra escrita e transcrição, registre em Considerações
+- Se houver ambiguidade, aponte antes ou dentro das Considerações
 
 ---
 
@@ -65,13 +89,13 @@ Para cada cenário, use obrigatoriamente os campos abaixo:
 Nome: [Nome do Cenário (Claro e Descritivo)]
 Objetivo: [Descrição concisa do que o teste valida]
 Precondição: [O estado inicial do sistema ou dados necessários]
-Script de Teste (Passo-a-Passo): [Os passos Gherkin: Dado que... E... Quando... E... Então... E...]
-Script de Teste (Passo-a-Passo) - Resultado: [O resultado esperado, começando com "Então..."]
+Script de Teste (Passo-a-Passo): [Passos Gherkin sem o resultado final, preferencialmente Dado/E/Quando/E]
+Script de Teste (Passo-a-Passo) - Resultado: [Resultado esperado, começando com "Então..."]
 Componente: [O módulo ou funcionalidade principal]
 Rótulos: [Palavras-chave separadas por vírgula]
 Propósito: [Breve explicação de por que este cenário é importante]
 Pasta: [O caminho/módulo onde o cenário deve ser armazenado]
-Proprietário: [Sugestão de nome do QA responsável]
+Proprietário: JIRAUSER23105
 Cobertura: [Número da História/Requisito coberto, se houver]
 Status: Aguardando execução
 
@@ -84,6 +108,8 @@ Apontar:
 - Riscos técnicos
 - Impacto em APIs
 - Problemas de dados
+- Pontos extraídos da transcrição, quando houver
+- Possíveis impactos de regressão
 
 ---
 
@@ -92,6 +118,7 @@ Apontar:
 - Direto
 - Sem explicações desnecessárias
 - Usar tabela quando necessário
+- Gerar conteúdo em português do Brasil
 
 # FORMATO DE SAÍDA
 - Gere múltiplos blocos, um para cada cenário.
@@ -106,5 +133,27 @@ Apontar:
 Título da Feature (Tema): %s
 Regra de Negócio (Critérios de Aceite): %s
 """, titulo, regra);
+    }
+
+    public static String getUserPromptComContexto(String titulo, String regra, String contexto) {
+        return String.format("""
+Título da Feature (Tema): %s
+Regra de Negócio (Critérios de Aceite): %s
+
+---
+
+CONTEXTO ADICIONAL
+Use o conteúdo abaixo como apoio para gerar cenários mais completos.
+
+%s
+
+---
+
+INSTRUÇÕES PARA USAR O CONTEXTO:
+- Extraia regras implícitas, exceções, riscos e decisões da reunião.
+- Considere impactos em APIs, integrações, permissões, dados e regressão.
+- Se o contexto estiver confuso, incompleto ou contraditório, registre em Considerações.
+- Não copie a transcrição inteira na resposta.
+""", titulo, regra, contexto);
     }
 }

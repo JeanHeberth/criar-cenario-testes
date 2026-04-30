@@ -2,6 +2,7 @@ package com.br.criarcenariotestes.business.service;
 
 import com.br.criarcenariotestes.business.ai.AiProvider;
 import com.br.criarcenariotestes.business.ai.AiProviderResolver;
+import com.br.criarcenariotestes.business.document.PdfTextExtractor;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.fallback.CenarioFallbackFactory;
@@ -12,6 +13,7 @@ import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import com.br.criarcenariotestes.infrastructure.repository.CenarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -21,6 +23,8 @@ public class CenarioService {
 
     private static final int MAX_TENTATIVAS = 2;
     private static final long TEMPO_ESPERA_MS = 2000L;
+    private final PdfTextExtractor pdfTextExtractor;
+
 
     private final CenarioRepository cenarioRepository;
     private final AiProviderResolver aiProviderResolver;
@@ -120,5 +124,35 @@ public class CenarioService {
 
     public void excluirCenario(String id) {
         cenarioRepository.deleteById(id);
+    }
+    public CenarioResponse gerarCenarioComPdf(String titulo, String regra, MultipartFile arquivo) {
+
+        String textoPdf;
+        try {
+            textoPdf = pdfTextExtractor.extrairTexto(arquivo.getInputStream());
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao processar PDF", e);
+        }
+
+        String systemPrompt = PromptFactory.getSystemPrompt();
+        String userPrompt = PromptFactory.getUserPromptComContexto(titulo, regra, textoPdf);
+
+        try {
+            AiProvider provider = aiProviderResolver.getActiveProvider();
+            String resposta = tentarComRetry(provider, systemPrompt, userPrompt);
+            return salvarResposta(new CenarioRequest(titulo, regra), resposta);
+        } catch (Exception e) {
+            System.err.println("⚠️ Falha com provider principal: " + e.getMessage());
+        }
+
+        try {
+            AiProvider fallbackProvider = aiProviderResolver.getFallbackProvider();
+            String resposta = tentarComRetry(fallbackProvider, systemPrompt, userPrompt);
+            return salvarResposta(new CenarioRequest(titulo, regra), resposta);
+        } catch (Exception e) {
+            System.err.println("⚠️ Falha com fallback: " + e.getMessage());
+        }
+
+        return salvarFallback(new CenarioRequest(titulo, regra));
     }
 }
