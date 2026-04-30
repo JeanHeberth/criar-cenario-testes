@@ -43,8 +43,8 @@ public class CenarioController {
     public CenarioResponse gerarComPdf(
             @RequestParam String titulo,
             @RequestParam String regraDeNegocio,
-            @RequestParam MultipartFile arquivo
+            @RequestParam("arquivos") List<MultipartFile> arquivos
     ) {
-        return cenarioService.gerarCenarioComPdf(titulo, regraDeNegocio, arquivo);
+        return cenarioService.gerarCenarioComPdf(titulo, regraDeNegocio, arquivos);
     }
 }
