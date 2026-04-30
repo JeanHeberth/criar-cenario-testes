@@ -16,6 +16,7 @@ public class CenarioItem {
     private String precondicao;
     private String scriptTeste;
     private String resultadoEsperado;
+    private String variaveis;
     private String componente;
     private String rotulos;
     private String proposito;
@@ -23,4 +24,5 @@ public class CenarioItem {
     private String proprietario;
     private String cobertura;
     private String status;
+
 }
