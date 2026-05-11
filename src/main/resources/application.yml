@@ -12,8 +12,8 @@ server:
   port: 8089
 
 ai:
-  active-provider: openai
-  fallback-provider: gemini
+  active-provider: gemini
+  fallback-provider: openai
 
   openai:
     api-key: ${OPENAI_API_KEY}
