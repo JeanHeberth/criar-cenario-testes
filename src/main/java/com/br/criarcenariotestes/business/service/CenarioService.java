@@ -25,14 +25,14 @@ public class CenarioService {
     private static final long TEMPO_ESPERA_MS = 2000L;
     private final PdfTextExtractor pdfTextExtractor;
 
-
     private final CenarioRepository cenarioRepository;
     private final AiProviderResolver aiProviderResolver;
     private final CenarioTextoParser cenarioTextoParser;
     private final CenarioFallbackFactory fallbackFactory;
+    private final AgentLoaderService agentLoaderService;
 
     public CenarioResponse gerarCenarioCompleto(CenarioRequest request) {
-        String systemPrompt = PromptFactory.getSystemPrompt();
+        String systemPrompt = buildSystemPrompt(request.agent());
         String userPrompt = PromptFactory.getUserPrompt(request.titulo(), request.regraDeNegocio());
 
         try {
@@ -129,6 +129,7 @@ public class CenarioService {
     public CenarioResponse gerarCenarioComPdf(
             String titulo,
             String regra,
+            String agent,
             List<MultipartFile> arquivos
     ) {
 
@@ -148,18 +149,17 @@ public class CenarioService {
             }
         }
 
-        String systemPrompt = PromptFactory.getSystemPrompt();
+        String systemPrompt = buildSystemPrompt(agent);
         String userPrompt = PromptFactory.getUserPromptComContexto(
                 titulo,
                 regra,
                 contextoCompleto.toString()
         );
 
-        // segue fluxo normal (provider + fallback)
         try {
             AiProvider provider = aiProviderResolver.getActiveProvider();
             String resposta = tentarComRetry(provider, systemPrompt, userPrompt);
-            return salvarResposta(new CenarioRequest(titulo, regra), resposta);
+            return salvarResposta(new CenarioRequest(titulo, regra, agent), resposta);
         } catch (Exception e) {
             System.err.println("⚠️ Provider principal falhou: " + e.getMessage());
         }
@@ -167,11 +167,22 @@ public class CenarioService {
         try {
             AiProvider fallbackProvider = aiProviderResolver.getFallbackProvider();
             String resposta = tentarComRetry(fallbackProvider, systemPrompt, userPrompt);
-            return salvarResposta(new CenarioRequest(titulo, regra), resposta);
+            return salvarResposta(new CenarioRequest(titulo, regra, agent), resposta);
         } catch (Exception e) {
             System.err.println("⚠️ Provider fallback falhou: " + e.getMessage());
         }
 
-        return salvarFallback(new CenarioRequest(titulo, regra));
+        return salvarFallback(new CenarioRequest(titulo, regra, agent));
+    }
+
+    private String buildSystemPrompt(String agent) {
+        String basePrompt = PromptFactory.getSystemPrompt();
+
+        if (agent == null || agent.isBlank()) {
+            return basePrompt;
+        }
+
+        String instrucoesAgente = agentLoaderService.loadAgentInstructions(agent);
+        return instrucoesAgente + "\n\n---\n\n" + basePrompt;
     }
 }
