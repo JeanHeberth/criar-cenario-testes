@@ -2,8 +2,13 @@ spring:
   application:
     name: criar-cenario-testes
 
+  config:
+    import: optional:file:.env[.properties]
+
   data:
     mongodb:
+      uri: ${MONGO_URI_NUVEM}
+      database: geradorcenarios
 
 server:
   address: 0.0.0.0
@@ -22,3 +27,9 @@ ai:
     api-key: ${GEMINI_API_KEY}
     model: gemini-2.5-flash
     url: https://generativelanguage.googleapis.com/v1beta/models
+
+jira:
+  base-url: ${JIRA_BASE_URL:}
+  email: ${JIRA_EMAIL:}
+  api-token: ${JIRA_API_TOKEN:}
+  issue-endpoint: /rest/api/3/issue

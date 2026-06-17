@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 
 import static org.springframework.http.HttpStatus.BAD_GATEWAY;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -31,11 +32,7 @@ public class JiraClient {
     public JsonNode buscarIssueComAnexos(String taskKey) {
         validarConfiguracao();
 
-        String url = jiraProperties.getBaseUrl()
-                + jiraProperties.getIssueEndpoint()
-                + "/"
-                + taskKey
-                + "?fields=attachment";
+        String url = montarBaseIssueUrl() + "/" + taskKey + "?fields=attachment";
 
         HttpHeaders headers = criarHeadersJson();
 
@@ -84,15 +81,25 @@ public class JiraClient {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "Basic " + gerarBasicAuth());
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setAccept(MediaType.parseMediaTypes(MediaType.APPLICATION_JSON_VALUE));
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         return headers;
     }
 
     private HttpHeaders criarHeadersBinario() {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "Basic " + gerarBasicAuth());
-        headers.setAccept(MediaType.parseMediaTypes(MediaType.APPLICATION_OCTET_STREAM_VALUE));
+        headers.set(HttpHeaders.ACCEPT, "*/*");
+        // Necessario para download de anexo no Jira Cloud
+        headers.set("X-Atlassian-Token", "no-check");
         return headers;
+    }
+
+    private String montarBaseIssueUrl() {
+        String baseUrl = jiraProperties.getBaseUrl().endsWith("/")
+                ? jiraProperties.getBaseUrl().substring(0, jiraProperties.getBaseUrl().length() - 1)
+                : jiraProperties.getBaseUrl();
+
+        return baseUrl + jiraProperties.getIssueEndpoint();
     }
 
     private String gerarBasicAuth() {
@@ -114,4 +121,3 @@ public class JiraClient {
         }
     }
 }
-
