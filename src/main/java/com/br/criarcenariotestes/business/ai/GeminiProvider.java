@@ -10,6 +10,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +31,12 @@ public class GeminiProvider implements AiProvider {
 
     @Override
     public String gerarResposta(String systemPrompt, String userPrompt) {
+        return gerarRespostaComHistorico(systemPrompt,
+                List.of(Map.of("role", "user", "content", userPrompt)));
+    }
+
+    @Override
+    public String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history) {
         validarConfiguracao();
 
         String urlFinal = properties.getUrl()
@@ -41,32 +48,43 @@ public class GeminiProvider implements AiProvider {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
+        // Monta system_instruction + contents para multi-turn
+        List<Map<String, Object>> contents = new ArrayList<>();
+
+        // System prompt como primeira mensagem de usuário
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            contents.add(Map.of(
+                    "role", "user",
+                    "parts", List.of(Map.of("text", systemPrompt))
+            ));
+            // Confirmação do modelo para iniciar conversa
+            contents.add(Map.of(
+                    "role", "model",
+                    "parts", List.of(Map.of("text", "Entendido. Estou pronto para ajudar."))
+            ));
+        }
+
+        // Histórico de mensagens (converte "assistant" -> "model" para Gemini)
+        for (Map<String, String> msg : history) {
+            String role = "assistant".equalsIgnoreCase(msg.get("role")) ? "model" : "user";
+            contents.add(Map.of(
+                    "role", role,
+                    "parts", List.of(Map.of("text", msg.get("content")))
+            ));
+        }
+
         Map<String, Object> requestBody = Map.of(
-                "contents", List.of(
-                        Map.of(
-                                "parts", List.of(
-                                        Map.of("text", systemPrompt + "\n\n" + userPrompt)
-                                )
-                        )
-                ),
-                "generationConfig", Map.of(
-                        "temperature", 0.2
-                )
+                "contents", contents,
+                "generationConfig", Map.of("temperature", 0.7)
         );
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
         try {
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    urlFinal,
-                    entity,
-                    String.class
-            );
-
+            ResponseEntity<String> response = restTemplate.postForEntity(urlFinal, entity, String.class);
             log.info("✅ Gemini status: {}", response.getStatusCode());
 
             JsonNode root = mapper.readTree(response.getBody());
-
             String result = root.path("candidates")
                     .get(0)
                     .path("content")
@@ -91,7 +109,6 @@ public class GeminiProvider implements AiProvider {
         if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
             throw new IllegalStateException("GEMINI_API_KEY não configurada");
         }
-
         if (properties.getModel() == null || properties.getModel().isBlank()) {
             throw new IllegalStateException("Modelo Gemini não configurado");
         }
