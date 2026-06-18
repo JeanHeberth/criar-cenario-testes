@@ -49,8 +49,8 @@ dependencyManagement {
     }
 }
 
-bootJar {
-    archiveFileName = 'app.jar'
+bootWar {
+    archiveFileName = "${project.name}.war"
 }
 
 test {
