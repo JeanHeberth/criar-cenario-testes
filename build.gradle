@@ -50,6 +50,7 @@ dependencyManagement {
 }
 
 bootWar {
+    enabled = true
     archiveFileName = "${project.name}.war"
 }
 
