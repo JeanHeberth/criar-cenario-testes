@@ -3,6 +3,7 @@ package com.br.criarcenariotestes.business.service;
 import com.br.criarcenariotestes.business.dto.AgentInfoResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -18,6 +19,9 @@ public class AgentLoaderService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentLoaderService.class);
     private static final String AGENTS_DIR = "agents";
+
+    @Value("${agents.directory:}")
+    private String configuredAgentsDir;
 
     public List<AgentInfoResponse> listAgents() {
         List<AgentInfoResponse> agents = new ArrayList<>();
@@ -52,6 +56,17 @@ public class AgentLoaderService {
     }
 
     private Path resolveAgentsDirectory() {
+        // 1. Tenta o path configurado via propriedade agents.directory
+        if (configuredAgentsDir != null && !configuredAgentsDir.isBlank()) {
+            Path configured = Paths.get(configuredAgentsDir).toAbsolutePath().normalize();
+            if (Files.isDirectory(configured)) {
+                log.info("Diretorio de agentes (configurado): {}", configured);
+                return configured;
+            }
+            log.warn("Diretorio configurado nao encontrado: {}", configured);
+        }
+
+        // 2. Fallback: busca relativa ao user.dir
         Path userDir = Paths.get("").toAbsolutePath().normalize();
 
         List<Path> candidates = new ArrayList<>();

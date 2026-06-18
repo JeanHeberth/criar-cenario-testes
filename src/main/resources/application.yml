@@ -13,6 +13,12 @@ spring:
 server:
   address: 0.0.0.0
   port: 8089
+  error:
+    include-message: always
+    include-exception: true
+
+agents:
+  directory: ${AGENTS_DIR:/Users/jeanheberth/Development/api/criar-cenario-testes/agents}
 
 ai:
   active-provider: gemini
