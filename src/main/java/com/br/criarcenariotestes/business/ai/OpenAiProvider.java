@@ -10,6 +10,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -30,34 +31,41 @@ public class OpenAiProvider implements AiProvider {
 
     @Override
     public String gerarResposta(String systemPrompt, String userPrompt) {
+        return gerarRespostaComHistorico(systemPrompt,
+                List.of(Map.of("role", "user", "content", userPrompt)));
+    }
+
+    @Override
+    public String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history) {
         validarConfiguracao();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(properties.getApiKey());
 
+        List<Map<String, String>> messages = new ArrayList<>();
+
+        // System prompt
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            messages.add(Map.of("role", "system", "content", systemPrompt));
+        }
+
+        // Histórico completo (OpenAI já aceita role: user/assistant diretamente)
+        messages.addAll(history);
+
         Map<String, Object> requestBody = Map.of(
                 "model", properties.getModel(),
-                "messages", List.of(
-                        Map.of("role", "system", "content", systemPrompt),
-                        Map.of("role", "user", "content", userPrompt)
-                ),
-                "temperature", 0.2
+                "messages", messages,
+                "temperature", 0.7
         );
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
         try {
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    properties.getUrl(),
-                    entity,
-                    String.class
-            );
-
+            ResponseEntity<String> response = restTemplate.postForEntity(properties.getUrl(), entity, String.class);
             log.info("✅ OpenAI status: {}", response.getStatusCode());
 
             JsonNode root = mapper.readTree(response.getBody());
-
             String result = root.path("choices")
                     .get(0)
                     .path("message")
@@ -80,7 +88,6 @@ public class OpenAiProvider implements AiProvider {
         if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
             throw new IllegalStateException("OPENAI_API_KEY não configurada");
         }
-
         if (properties.getModel() == null || properties.getModel().isBlank()) {
             throw new IllegalStateException("Modelo OpenAI não configurado");
         }

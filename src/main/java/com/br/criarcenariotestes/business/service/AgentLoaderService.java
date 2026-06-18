@@ -1,6 +1,8 @@
 package com.br.criarcenariotestes.business.service;
 
 import com.br.criarcenariotestes.business.dto.AgentInfoResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -14,29 +16,32 @@ import java.util.List;
 @Service
 public class AgentLoaderService {
 
+    private static final Logger log = LoggerFactory.getLogger(AgentLoaderService.class);
     private static final String AGENTS_DIR = "agents";
 
     public List<AgentInfoResponse> listAgents() {
         List<AgentInfoResponse> agents = new ArrayList<>();
+        Path agentsPath = resolveAgentsDirectory();
 
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(AGENTS_DIR), "*.agent.md")) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(agentsPath, "*.agent.md")) {
             for (Path entry : stream) {
                 String fileName = entry.getFileName().toString();
                 String id = fileName.replace(".agent.md", "");
                 agents.add(new AgentInfoResponse(id, fileName));
             }
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao listar agentes", e);
+            throw new RuntimeException("Erro ao listar agentes em: " + agentsPath.toAbsolutePath(), e);
         }
 
         return agents;
     }
 
     public String loadAgentInstructions(String agentId) {
-        Path path = Paths.get(AGENTS_DIR, agentId + ".agent.md");
+        Path agentsPath = resolveAgentsDirectory();
+        Path path = agentsPath.resolve(agentId + ".agent.md");
 
         if (!Files.exists(path)) {
-            throw new RuntimeException("Agente nao encontrado: " + agentId);
+            throw new RuntimeException("Agente nao encontrado: " + agentId + " em " + agentsPath.toAbsolutePath());
         }
 
         try {
@@ -45,5 +50,29 @@ public class AgentLoaderService {
             throw new RuntimeException("Erro ao ler agente: " + agentId, e);
         }
     }
-}
 
+    private Path resolveAgentsDirectory() {
+        Path userDir = Paths.get("").toAbsolutePath().normalize();
+
+        List<Path> candidates = new ArrayList<>();
+        candidates.add(userDir.resolve(AGENTS_DIR));
+        candidates.add(userDir.resolve("api").resolve("criar-cenario-testes").resolve(AGENTS_DIR));
+        candidates.add(userDir.resolve("criar-cenario-testes").resolve(AGENTS_DIR));
+
+        Path cursor = userDir;
+        while (cursor != null) {
+            candidates.add(cursor.resolve(AGENTS_DIR));
+            candidates.add(cursor.resolve("api").resolve("criar-cenario-testes").resolve(AGENTS_DIR));
+            cursor = cursor.getParent();
+        }
+
+        for (Path candidate : candidates) {
+            if (Files.isDirectory(candidate)) {
+                log.info("Diretorio de agentes resolvido: {}", candidate.toAbsolutePath());
+                return candidate;
+            }
+        }
+
+        throw new RuntimeException("Diretorio de agentes nao encontrado. user.dir=" + userDir);
+    }
+}
