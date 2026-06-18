@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        CODECOV_TOKEN = credentials('CODECOV_TOKEN_GASTOS_MENSAIS')
+        CODECOV_TOKEN = credentials('CODECOV_TOKEN')
         GITHUB_TOKEN  = credentials('GITHUB_TOKEN')
 
         TOMCAT_WEBAPPS_WINDOWS = 'C:\\apache-tomcat-11.0.11\\webapps'
@@ -16,7 +16,6 @@ pipeline {
                 checkout scm
             }
         }
-
         stage('Build') {
             steps {
                 script {
