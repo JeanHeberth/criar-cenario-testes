@@ -4,6 +4,7 @@ pipeline {
     environment {
         TOMCAT_WEBAPPS_WINDOWS = 'C:\\apache-tomcat-11.0.11\\webapps'
         TOMCAT_WEBAPPS_UNIX    = '/opt/homebrew/opt/tomcat/libexec/webapps'
+        JAVA_HOME_WINDOWS      = 'C:\\Program Files\\Java\\jdk-21.0.10'
     }
 
     stages {
@@ -23,11 +24,25 @@ pipeline {
                             export JAVA_HOME=$(/usr/libexec/java_home -v 21)
                             export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+                            echo "JAVA_HOME=$JAVA_HOME"
+                            java -version
+                            ./gradlew -version
+
                             chmod +x gradlew
                             ./gradlew clean build -x test
                         '''
                     } else {
-                        bat 'gradlew clean build -x test'
+                        bat '''
+                            set "JAVA_HOME=%JAVA_HOME_WINDOWS%"
+                            set "PATH=%JAVA_HOME%\\bin;%PATH%"
+
+                            echo JAVA_HOME=%JAVA_HOME%
+                            where java
+                            java -version
+                            gradlew -version
+
+                            gradlew clean build -x test
+                        '''
                     }
                 }
             }
