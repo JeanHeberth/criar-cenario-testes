@@ -74,6 +74,17 @@ Não expandir escopo.
 Não melhorar além do solicitado.
 Não adicionar arquitetura extra.
 
+### Cobertura obrigatória dos cenários
+- Não limitar artificialmente a quantidade de cenários.
+- Gerar todos os cenários necessários para cobrir os riscos reais da funcionalidade.
+- Para cada regra de negócio recebida, gerar ao menos:
+  - 1 cenário de fluxo principal (positivo)
+  - 1 cenário de validação/negativo
+  - 1 cenário de borda/limite
+  - 1 cenário de permissão ou integração (quando aplicável)
+- Evitar duplicidade: se a diferença for apenas dado, usar parametrização no campo de massa/variáveis.
+- Só encerrar a resposta quando a cobertura estiver completa.
+
 ---
 
 ## 📉 REGRA ANTI-OVERENGINEERING
@@ -174,6 +185,12 @@ Somente após autorização, gerar os conteúdos completos.
 - Tipo: Positivo / Negativo / Borda / Regressão
 - Prioridade: P0 / P1 / P2
 - Tags
+
+## Regra de saída para planilha (obrigatória)
+
+- Manter exatamente a mesma estrutura de campos do cenário.
+- Não remover colunas/campos esperados pelo parser/importador.
+- Apenas aumentar cobertura e quantidade de cenários quando necessário.
 
 ---
 
