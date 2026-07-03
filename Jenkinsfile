@@ -19,7 +19,9 @@ pipeline {
         stage('Build') {
             steps {
                 script {
+
                     if (isUnix()) {
+
                         sh '''
                             export JAVA_HOME=$(/usr/libexec/java_home -v 21)
                             export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -31,17 +33,25 @@ pipeline {
                             chmod +x gradlew
                             ./gradlew clean build -x test
                         '''
+
                     } else {
+
                         bat '''
+                            @echo off
+
                             set "JAVA_HOME=%JAVA_HOME_WINDOWS%"
                             set "PATH=%JAVA_HOME%\\bin;%PATH%"
 
+                            echo ==============================
                             echo JAVA_HOME=%JAVA_HOME%
                             where java
                             java -version
-                            gradlew -version
+                            call gradlew -version
+                            echo ==============================
 
-                            gradlew clean build -x test
+                            call gradlew clean build -x test
+
+                            if errorlevel 1 exit /b %errorlevel%
                         '''
                     }
                 }
@@ -89,16 +99,25 @@ pipeline {
                     } else {
 
                         bat '''
+                            @echo off
+
                             echo Procurando arquivo WAR...
 
-                            for %%F in ("%WORKSPACE%\\build\\libs\\*.war") do (
+                            if not exist "%WORKSPACE%\\build\\libs" (
+                                echo Pasta build\\libs nao encontrada.
+                                exit /b 1
+                            )
 
+                            dir "%WORKSPACE%\\build\\libs"
+
+                            for %%F in ("%WORKSPACE%\\build\\libs\\*.war") do (
                                 echo WAR encontrado: %%~nxF
 
                                 copy /Y "%%~fF" "%TOMCAT_WEBAPPS_WINDOWS%\\%%~nxF"
 
-                                echo Deploy concluido.
+                                if errorlevel 1 exit /b 1
 
+                                echo Deploy concluido.
                                 exit /b 0
                             )
 
