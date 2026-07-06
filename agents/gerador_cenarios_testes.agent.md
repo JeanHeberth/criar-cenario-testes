@@ -77,13 +77,16 @@ Não adicionar arquitetura extra.
 ### Cobertura obrigatória dos cenários
 - Não limitar artificialmente a quantidade de cenários.
 - Gerar todos os cenários necessários para cobrir os riscos reais da funcionalidade.
+- **MÍNIMO OBRIGATÓRIO: 6-10 cenários por regra de negócio.**
 - Para cada regra de negócio recebida, gerar ao menos:
-  - 1 cenário de fluxo principal (positivo)
-  - 1 cenário de validação/negativo
-  - 1 cenário de borda/limite
-  - 1 cenário de permissão ou integração (quando aplicável)
+  - 1-2 cenários de fluxo principal (positivo, com variações se aplicável)
+  - 2-3 cenários de validação/negativo (diferentes tipos de erro)
+  - 1-2 cenários de borda/limite (dados nos extremos, campos obrigatórios)
+  - 1-2 cenários de permissão ou integração (quando aplicável)
+  - 1-2 cenários exploratórios/contextuais (baseados na regra específica)
 - Evitar duplicidade: se a diferença for apenas dado, usar parametrização no campo de massa/variáveis.
-- Só encerrar a resposta quando a cobertura estiver completa.
+- **CRÍTICO: Só encerrar a resposta quando quantidade mínima (6+) estiver atingida.**
+- Se a resposta tiver menos de 6 cenários, AUMENTAR cobertura antes de finalizar.
 
 ---
 
