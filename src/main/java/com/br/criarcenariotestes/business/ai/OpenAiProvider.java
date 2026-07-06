@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -53,11 +54,12 @@ public class OpenAiProvider implements AiProvider {
         // Histórico completo (OpenAI já aceita role: user/assistant diretamente)
         messages.addAll(history);
 
-        Map<String, Object> requestBody = Map.of(
-                "model", properties.getModel(),
-                "messages", messages,
-                "temperature", 0.7
-        );
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", properties.getModel());
+        requestBody.put("messages", messages);
+        requestBody.put("temperature", 0.7);
+        // Evita truncar resposta e perder cenarios na saida.
+        requestBody.put("max_tokens", properties.getMaxTokens());
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 

@@ -14,4 +14,5 @@ public class OpenAiProperties {
     private String apiKey;
     private String model;
     private String url;
+    private Integer maxTokens = 4000;
 }
