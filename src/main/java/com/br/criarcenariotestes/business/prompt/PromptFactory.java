@@ -7,29 +7,43 @@ public class PromptFactory {
 
     public static String getSystemPrompt() {
         return """
-                # CONTEXTO
-                Você atua dentro de um fluxo real de desenvolvimento, onde:
-                - Os cenários serão usados em produção
-                - O sistema está próximo do deploy
-                - Existe risco real de falhas
-                - O foco é PREVENÇÃO de incidentes
-                
-                # OBJETIVO
-                Gerar:
-                1. Plano Macro de Teste (PMT)
-                2. Cenários de Teste estruturados no padrão Zephyr Scale
-                3. Cenários parametrizados usando variáveis quando fizer sentido
+                 # CONTEXTO
+                 Você atua dentro de um fluxo real de desenvolvimento, onde:
+                 - Os cenários serão usados em produção
+                 - O sistema está próximo do deploy
+                 - Existe risco real de falhas
+                 - O foco é PREVENÇÃO de incidentes
+                 
+                 ⚠️ AVISO CRÍTICO: Respostas com APENAS 2-3 cenários são INACEITÁVEIS.
+                 Qualidade da geração é medida por COBERTURA COMPLETA, não por tamanho.
+                 Se retornar poucos cenários, você não completou o trabalho.
+                 
+                 # OBJETIVO
+                 Gerar:
+                 1. Plano Macro de Teste (PMT)
+                 2. Cenários de Teste estruturados no padrão Zephyr Scale (MÍNIMO 6-10 cenários)
+                 3. Cenários parametrizados usando variáveis quando fizer sentido
                 
                 ---
                 
-                # REGRAS OBRIGATÓRIAS
-                
-                ## QUANTIDADE DE CENÁRIOS
-                - Gere a quantidade de cenários necessária para cobrir completamente os riscos da funcionalidade.
-                - Não limite artificialmente a quantidade.
-                - Evite cenários redundantes.
-                - Use variáveis sempre que possível para reduzir repetição.
-                - Priorize qualidade, cobertura e risco ao invés de volume.
+                 # REGRAS OBRIGATÓRIAS
+                 
+                 ## QUANTIDADE DE CENÁRIOS (CRÍTICO)
+                 - Gere a quantidade de cenários necessária para cobrir completamente os riscos da funcionalidade.
+                 - MÍNIMO OBRIGATÓRIO: 6-10 cenários por regra de negócio (não parar com 2-3).
+                 - Não limite artificialmente a quantidade.
+                 - Evite cenários redundantes.
+                 - Use variáveis sempre que possível para reduzir repetição.
+                 - Priorize qualidade, cobertura e risco ao invés de volume.
+                 
+                 ### Cobertura Mínima Esperada:
+                 - 1-2 cenários positivos (fluxo principal com variações)
+                 - 2-3 cenários negativos (validações, erros, rejeições)
+                 - 1-2 cenários de borda (limites, campos obrigatórios, tamanho máximo/mínimo)
+                 - 1-2 cenários de permissão/integração (segurança, autorização)
+                 - 1-2 cenários exploratórios ou contextuais (baseados na regra específica)
+                 
+                 Se houver menos de 6 cenários após verificação, AUMENTAR cobertura.
                 
                 ## SOBRE OS CENÁRIOS
                 - Não gerar cenários genéricos.
