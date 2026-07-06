@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -73,10 +74,14 @@ public class GeminiProvider implements AiProvider {
             ));
         }
 
-        Map<String, Object> requestBody = Map.of(
-                "contents", contents,
-                "generationConfig", Map.of("temperature", 0.7)
-        );
+        Map<String, Object> generationConfig = new HashMap<>();
+        generationConfig.put("temperature", 0.7);
+        // Evita truncar resposta e perder cenarios na saida.
+        generationConfig.put("maxOutputTokens", properties.getMaxOutputTokens());
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("contents", contents);
+        requestBody.put("generationConfig", generationConfig);
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
