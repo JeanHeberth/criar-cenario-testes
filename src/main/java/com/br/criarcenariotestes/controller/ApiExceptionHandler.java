@@ -1,13 +1,13 @@
 package com.br.criarcenariotestes.controller;
 
 import com.br.criarcenariotestes.business.dto.ErrorResponse;
-import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -20,32 +20,42 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatusException(
             ResponseStatusException ex,
-            HttpServletRequest request
+            WebRequest request
     ) {
         HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        String path = extrairPath(request);
         return ResponseEntity.status(status).body(new ErrorResponse(
                 Instant.now(),
                 status.value(),
                 status.getReasonPhrase(),
                 ex.getReason(),
-                request.getRequestURI()
+                path
         ));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex,
-            HttpServletRequest request
+            WebRequest request
     ) {
-        log.error("Erro inesperado em [{}]: {}", request.getRequestURI(), ex.getMessage(), ex);
+        String path = extrairPath(request);
+        log.error("Erro inesperado em [{}]: {}", path, ex.getMessage(), ex);
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
         return ResponseEntity.status(status).body(new ErrorResponse(
                 Instant.now(),
                 status.value(),
                 status.getReasonPhrase(),
                 ex.getMessage() != null ? ex.getMessage() : "Erro interno inesperado",
-                request.getRequestURI()
+                path
         ));
+    }
+
+    private String extrairPath(WebRequest request) {
+        String description = request.getDescription(false);
+        if (description.isBlank()) {
+            return "";
+        }
+        return description.startsWith("uri=") ? description.substring(4) : description;
     }
 }
 
