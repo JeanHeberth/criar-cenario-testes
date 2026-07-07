@@ -1,12 +1,6 @@
 spring:
   application:
     name: criar-cenario-testes
-logging:
-  level:
-    root: INFO
-    br.com: DEBUG
-  config:
-    import: optional:file:.env[.properties]
 
   data:
     mongodb:
@@ -43,3 +37,8 @@ jira:
   email: ${JIRA_EMAIL:}
   api-token: ${JIRA_API_TOKEN:}
   issue-endpoint: /rest/api/3/issue
+
+logging:
+  level:
+    root: INFO
+    br.com: DEBUG
