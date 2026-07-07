@@ -4,14 +4,19 @@ import com.br.criarcenariotestes.business.dto.AgentInfoResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -19,52 +24,102 @@ public class AgentLoaderService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentLoaderService.class);
     private static final String AGENTS_DIR = "agents";
+    private static final String CLASSPATH_AGENTS_PATTERN = "classpath*:agents/*.agent.md";
 
     @Value("${agents.directory:}")
     private String configuredAgentsDir;
 
     public List<AgentInfoResponse> listAgents() {
         List<AgentInfoResponse> agents = new ArrayList<>();
-        Path agentsPath = resolveAgentsDirectory();
+        Path agentsPath = resolveAgentsDirectorySafely();
 
-        log.info("Listando agentes no diretório: {}", agentsPath.toAbsolutePath());
-
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(agentsPath, "*.agent.md")) {
-            for (Path entry : stream) {
-                String fileName = entry.getFileName().toString();
-                String id = fileName.replace(".agent.md", "");
-                agents.add(new AgentInfoResponse(id, fileName));
+        if (agentsPath != null) {
+            log.info("Listando agentes no diretório: {}", agentsPath.toAbsolutePath());
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(agentsPath, "*.agent.md")) {
+                for (Path entry : stream) {
+                    String fileName = entry.getFileName().toString();
+                    String id = fileName.replace(".agent.md", "");
+                    agents.add(new AgentInfoResponse(id, fileName));
+                }
+            } catch (IOException e) {
+                throw new RuntimeException("Erro ao listar agentes em: " + agentsPath.toAbsolutePath(), e);
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Erro ao listar agentes em: " + agentsPath.toAbsolutePath(), e);
         }
+
+        if (agents.isEmpty()) {
+            agents.addAll(listClasspathAgents());
+        }
+
+        agents.sort(Comparator.comparing(AgentInfoResponse::id));
 
         return agents;
     }
 
     public String loadAgentInstructions(String agentId) {
-        Path agentsPath = resolveAgentsDirectory();
-        Path path = agentsPath.resolve(agentId + ".agent.md");
-
-        log.info("Carregando instruções do agente '{}'. path='{}'", agentId, path.toAbsolutePath());
-
-        if (!Files.exists(path)) {
-            throw new RuntimeException("Agente nao encontrado: " + agentId + " em " + agentsPath.toAbsolutePath());
+        Path agentsPath = resolveAgentsDirectorySafely();
+        if (agentsPath != null) {
+            Path path = agentsPath.resolve(agentId + ".agent.md");
+            log.info("Carregando instruções do agente '{}'. path='{}'", agentId, path.toAbsolutePath());
+            if (Files.exists(path)) {
+                try {
+                    String conteudo = Files.readString(path);
+                    log.info("Agente '{}' carregado com sucesso. path='{}', length={}",
+                            agentId,
+                            path.toAbsolutePath(),
+                            conteudo.length());
+                    return conteudo;
+                } catch (IOException e) {
+                    throw new RuntimeException("Erro ao ler agente: " + agentId, e);
+                }
+            }
         }
 
+        return loadAgentFromClasspath(agentId);
+    }
+
+    private List<AgentInfoResponse> listClasspathAgents() {
+        List<AgentInfoResponse> classpathAgents = new ArrayList<>();
         try {
-            String conteudo = Files.readString(path);
-            log.info("Agente '{}' carregado com sucesso. path='{}', length={}",
-                    agentId,
-                    path.toAbsolutePath(),
-                    conteudo.length());
-            return conteudo;
+            Resource[] resources = new PathMatchingResourcePatternResolver().getResources(CLASSPATH_AGENTS_PATTERN);
+            for (Resource resource : resources) {
+                String fileName = resource.getFilename();
+                if (fileName != null && fileName.endsWith(".agent.md")) {
+                    String id = fileName.replace(".agent.md", "");
+                    classpathAgents.add(new AgentInfoResponse(id, fileName));
+                }
+            }
+
+            if (!classpathAgents.isEmpty()) {
+                log.info("Agentes carregados via classpath: {}", classpathAgents.size());
+            }
+
+            return classpathAgents;
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao ler agente: " + agentId, e);
+            throw new RuntimeException("Erro ao listar agentes no classpath", e);
         }
     }
 
-    private Path resolveAgentsDirectory() {
+    private String loadAgentFromClasspath(String agentId) {
+        Resource resource = new PathMatchingResourcePatternResolver()
+                .getResource("classpath:agents/" + agentId + ".agent.md");
+
+        if (!resource.exists()) {
+            throw new RuntimeException("Agente nao encontrado: " + agentId);
+        }
+
+        try (InputStream inputStream = resource.getInputStream()) {
+            String conteudo = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            log.info("Agente '{}' carregado via classpath. resource='{}', length={}",
+                    agentId,
+                    resource.getDescription(),
+                    conteudo.length());
+            return conteudo;
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao ler agente no classpath: " + agentId, e);
+        }
+    }
+
+    private Path resolveAgentsDirectorySafely() {
         // 1. Tenta o path configurado via propriedade agents.directory
         if (configuredAgentsDir != null && !configuredAgentsDir.isBlank()) {
             Path configured = Paths.get(configuredAgentsDir).toAbsolutePath().normalize();
@@ -97,10 +152,10 @@ public class AgentLoaderService {
             }
         }
 
-        log.error("Falha ao resolver diretório de agentes. user.dir='{}', configuredAgentsDir='{}', candidates='{}'",
+        log.warn("Diretorio externo de agentes nao encontrado. user.dir='{}', configuredAgentsDir='{}', candidates='{}'",
                 userDir,
                 configuredAgentsDir,
                 candidates);
-        throw new RuntimeException("Diretorio de agentes nao encontrado. user.dir=" + userDir);
+        return null;
     }
 }

@@ -15,7 +15,7 @@ server:
     include-exception: true
 
 agents:
-  directory: /Users/jeanheberth/Development/api/criar-cenario-testes/agents
+  directory: ${AGENTS_DIRECTORY:}
 
 ai:
   active-provider: openai
