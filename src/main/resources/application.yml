@@ -18,19 +18,21 @@ agents:
   directory: /Users/jeanheberth/Development/api/criar-cenario-testes/agents
 
 ai:
-  active-provider: gemini
-  fallback-provider: openai
+  active-provider: openai
+  fallback-provider: gemini
 
   openai:
     api-key: ${OPENAI_API_KEY}
     model: gpt-4.1
     url: https://api.openai.com/v1/chat/completions
+    max-tokens: 4000
 
 
   gemini:
     api-key: ${GEMINI_API_KEY}
     model: gemini-2.5-flash
     url: https://generativelanguage.googleapis.com/v1beta/models
+    max-tokens: 4000
 
 jira:
   base-url: ${JIRA_BASE_URL:}
