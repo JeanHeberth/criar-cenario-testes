@@ -46,6 +46,13 @@ public class GeminiProvider implements AiProvider {
                 + ":generateContent?key="
                 + properties.getApiKey();
 
+        log.info("Gemini request. model='{}', url='{}', maxOutputTokens={}, systemPromptLength={}, historySize={}",
+                properties.getModel(),
+                properties.getUrl(),
+                properties.getMaxOutputTokens(),
+                systemPrompt == null ? 0 : systemPrompt.length(),
+                history == null ? 0 : history.size());
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -98,6 +105,11 @@ public class GeminiProvider implements AiProvider {
                     .path("text")
                     .asText();
 
+            log.info("Gemini response recebida. model='{}', responseLength={}, preview='{}'",
+                    properties.getModel(),
+                    result == null ? 0 : result.length(),
+                    gerarPreview(result));
+
             if (result == null || result.isBlank()) {
                 throw new RuntimeException("Resposta vazia do Gemini");
             }
@@ -121,5 +133,14 @@ public class GeminiProvider implements AiProvider {
         if (properties.getUrl() == null || properties.getUrl().isBlank()) {
             throw new IllegalStateException("URL Gemini não configurada");
         }
+    }
+
+    private String gerarPreview(String valor) {
+        if (valor == null || valor.isBlank()) {
+            return "";
+        }
+
+        String normalizado = valor.replaceAll("\\s+", " ").trim();
+        return normalizado.length() <= 250 ? normalizado : normalizado.substring(0, 250) + "...";
     }
 }

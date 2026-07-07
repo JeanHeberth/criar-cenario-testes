@@ -27,6 +27,8 @@ public class AgentLoaderService {
         List<AgentInfoResponse> agents = new ArrayList<>();
         Path agentsPath = resolveAgentsDirectory();
 
+        log.info("Listando agentes no diretório: {}", agentsPath.toAbsolutePath());
+
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(agentsPath, "*.agent.md")) {
             for (Path entry : stream) {
                 String fileName = entry.getFileName().toString();
@@ -44,12 +46,19 @@ public class AgentLoaderService {
         Path agentsPath = resolveAgentsDirectory();
         Path path = agentsPath.resolve(agentId + ".agent.md");
 
+        log.info("Carregando instruções do agente '{}'. path='{}'", agentId, path.toAbsolutePath());
+
         if (!Files.exists(path)) {
             throw new RuntimeException("Agente nao encontrado: " + agentId + " em " + agentsPath.toAbsolutePath());
         }
 
         try {
-            return Files.readString(path);
+            String conteudo = Files.readString(path);
+            log.info("Agente '{}' carregado com sucesso. path='{}', length={}",
+                    agentId,
+                    path.toAbsolutePath(),
+                    conteudo.length());
+            return conteudo;
         } catch (IOException e) {
             throw new RuntimeException("Erro ao ler agente: " + agentId, e);
         }
@@ -88,6 +97,10 @@ public class AgentLoaderService {
             }
         }
 
+        log.error("Falha ao resolver diretório de agentes. user.dir='{}', configuredAgentsDir='{}', candidates='{}'",
+                userDir,
+                configuredAgentsDir,
+                candidates);
         throw new RuntimeException("Diretorio de agentes nao encontrado. user.dir=" + userDir);
     }
 }
