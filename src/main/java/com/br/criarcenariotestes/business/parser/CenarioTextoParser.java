@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 @Component
 public class CenarioTextoParser {
 
-    private static final Pattern NOME_CAMPO_PATTERN = Pattern.compile("(?i)\\bnome\\s*:");
+    private static final Pattern NOME_CAMPO_PATTERN = Pattern.compile("(?i)\\b(?:nome|objetivo|pré-condições|pré-condição|precondição|passos|resultado esperado)\\b");
 
     public List<CenarioItem> parsear(String resposta) {
         List<CenarioItem> itens = new ArrayList<>();
@@ -23,28 +23,39 @@ public class CenarioTextoParser {
 
         for (String bloco : blocos) {
             String texto = bloco.trim();
+            if (texto.isBlank()) {
+                continue;
+            }
 
             if (!NOME_CAMPO_PATTERN.matcher(texto).find()) {
                 continue;
             }
 
-            // Extrair campos com múltiplos formatos possíveis
             String nome = extrairCampoMultiplo(texto, "Nome");
             String objetivo = extrairCampoMultiplo(texto, "Objetivo");
             String precondicao = extrairCampoMultiplo(texto, "Pré-condições", "Precondição", "Pré-condição");
             String passos = extrairCampoMultiplo(texto, "Passos", "Script de Teste \\(Passo-a-Passo\\)");
             String resultadoEsperado = extrairCampoMultiplo(texto, "Resultado esperado", "Script de Teste \\(Passo-a-Passo\\) - Resultado");
-            
-            // Fallback: se nome contém tudo, tentar extrair do texto corrido
-            if (nome.contains("Objetivo:") || nome.contains("Pré-condições:") || nome.contains("Passos:")) {
-                objetivo = extrairTextoEntre(nome, "Objetivo:", "Pré-condições:", "Passos:");
-                precondicao = extrairTextoEntre(nome, "Pré-condições:", "Passos:", "Resultado esperado:");
-                passos = extrairTextoEntre(nome, "Passos:", "Resultado esperado:", "Tipo:", "Prioridade:");
-                resultadoEsperado = extrairTextoEntre(nome, "Resultado esperado:", "Tipo:", "Prioridade:", "Tags:");
-                // Limpar nome para conter apenas o nome real
-                nome = extrairTextoAte(nome, "Objetivo:", "Pré-condições:");
+
+            if (nome.isBlank() && objetivo.isBlank() && precondicao.isBlank() && passos.isBlank() && resultadoEsperado.isBlank()) {
+                String textoLimpo = limparTextoParaParse(texto);
+                if (!textoLimpo.isBlank()) {
+                    nome = extrairPrimeiraLinha(textoLimpo);
+                    objetivo = extrairTextoEntre(textoLimpo, "Objetivo", "Pré-condições", "Passos", "Resultado esperado", "Tipo", "Prioridade");
+                    precondicao = extrairTextoEntre(textoLimpo, "Pré-condições", "Passos", "Resultado esperado", "Tipo", "Prioridade");
+                    passos = extrairTextoEntre(textoLimpo, "Passos", "Resultado esperado", "Tipo", "Prioridade");
+                    resultadoEsperado = extrairTextoEntre(textoLimpo, "Resultado esperado", "Tipo", "Prioridade");
+                }
             }
-            
+
+            if (nome.isBlank() && objetivo.isBlank() && precondicao.isBlank() && passos.isBlank() && resultadoEsperado.isBlank()) {
+                continue;
+            }
+
+            if (nome.isBlank()) {
+                nome = extrairPrimeiraLinha(texto);
+            }
+
             CenarioItem item = CenarioItem.builder()
                     .nome(nome)
                     .objetivo(objetivo)
@@ -98,7 +109,6 @@ public class CenarioTextoParser {
         };
 
         int indice = -1;
-
         for (int i = 0; i < campos.length; i++) {
             if (campos[i].equals(campo)) {
                 indice = i;
@@ -110,15 +120,22 @@ public class CenarioTextoParser {
             return "";
         }
 
-        String proximosCampos = String.join("|", java.util.Arrays.copyOfRange(campos, indice + 1, campos.length));
+        String[] proximos = java.util.Arrays.copyOfRange(campos, indice + 1, campos.length);
+        String nextLabels = java.util.Arrays.stream(proximos)
+                .map(Pattern::quote)
+                .reduce((a, b) -> a + "|" + b)
+                .orElse("");
 
-        String regex = proximosCampos.isBlank()
-                ? campo + ":\\s*([\\s\\S]*?)$"
-                : campo + ":\\s*([\\s\\S]*?)(?=\\n(?:" + proximosCampos + "):|$)";
+        String regex = "(?im)^\\s*(?:\\*\\*\\s*)?" + Pattern.quote(campo) + "(?:\\s*\\*\\*)?\\s*:\\s*(.+?)(?=^\\s*(?:\\*\\*\\s*)?(?:" + nextLabels + ")(?:\\s*\\*\\*)?\\s*:|^\\s*---|\\Z)";
 
-        var matcher = Pattern.compile(regex, Pattern.CASE_INSENSITIVE).matcher(bloco);
+        var matcher = Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(bloco);
+        if (matcher.find()) {
+            return limparTextoParaParse(matcher.group(1)).trim();
+        }
 
-        return matcher.find() ? matcher.group(1).trim() : "";
+        String fallbackRegex = "(?i)" + Pattern.quote(campo) + "\\s*:\\s*([\\s\\S]*?)(?=\\n(?:(?:" + nextLabels.replace("|", ")|(?:") + ")):|$)";
+        var fallbackMatcher = Pattern.compile(fallbackRegex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(bloco);
+        return fallbackMatcher.find() ? limparTextoParaParse(fallbackMatcher.group(1)).trim() : "";
     }
 
     private String extrairSecao(String texto, String inicio, String fim) {
@@ -180,6 +197,37 @@ public class CenarioTextoParser {
         }
         
         return texto.substring(0, idxFim).trim();
+    }
+
+    private String limparTextoParaParse(String texto) {
+        if (texto == null) {
+            return "";
+        }
+
+        return texto
+                .replace("\r", "")
+                .replace("**", "")
+                .replace("``", "")
+                .replace("`", "")
+                .replace("\n", "\n")
+                .trim();
+    }
+
+    private String extrairPrimeiraLinha(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return "";
+        }
+
+        String linha = texto.lines()
+                .map(String::trim)
+                .filter(l -> !l.isBlank())
+                .findFirst()
+                .orElse("");
+
+        return limparTextoParaParse(linha)
+                .replace("^", "")
+                .replace("#", "")
+                .trim();
     }
 
     private String valorOuPadrao(String valor, String padrao) {
