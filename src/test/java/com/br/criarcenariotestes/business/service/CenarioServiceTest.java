@@ -1,105 +1,164 @@
 package com.br.criarcenariotestes.business.service;
 
-import com.br.criarcenariotestes.business.ai.AiProvider;
-import com.br.criarcenariotestes.business.ai.AiProviderResolver;
-import com.br.criarcenariotestes.business.document.PdfTextExtractor;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.fallback.CenarioFallbackFactory;
-import com.br.criarcenariotestes.business.parser.CenarioTextoParser;
+import com.br.criarcenariotestes.business.workflow.QaWorkflowService;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
+import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import com.br.criarcenariotestes.infrastructure.repository.CenarioRepository;
+import com.br.criarcenariotestes.business.document.PdfTextExtractor;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("CenarioService - Testes Unitários (Refatorado BMAD)")
 class CenarioServiceTest {
 
     @Mock
-    private PdfTextExtractor pdfTextExtractor;
+    private QaWorkflowService qaWorkflowService;
+
     @Mock
     private CenarioRepository cenarioRepository;
-    @Mock
-    private AiProviderResolver aiProviderResolver;
+
     @Mock
     private CenarioFallbackFactory fallbackFactory;
-    @Mock
-    private AgentLoaderService agentLoaderService;
-    @Mock
-    private AiProvider activeProvider;
 
-    private CenarioService cenarioService;
+    @Mock
+    private PdfTextExtractor pdfTextExtractor;
+
+    @InjectMocks
+    private CenarioService service;
+
+    private CenarioRequest request;
+    private CenarioResponse expectedResponse;
 
     @BeforeEach
     void setUp() {
-        cenarioService = new CenarioService(
-                pdfTextExtractor,
-                cenarioRepository,
-                aiProviderResolver,
-                new CenarioTextoParser(),
-                fallbackFactory,
-                agentLoaderService
+        request = new CenarioRequest(
+                "Login OAuth",
+                "Sistema de login",
+                "gerador_cenarios_testes"
+        );
+
+        expectedResponse = new CenarioResponse(
+                "123",
+                "Login OAuth",
+                "Sistema de login",
+                "Critérios de aceitação",
+                List.of(new CenarioItem())
         );
     }
 
     @Test
-    void devePersistirTodosOsCenariosRetornadosPelaIaSemReduzirParaDois() {
-        CenarioRequest request = new CenarioRequest("Pagamento", "Regra de negocio", null);
+    @DisplayName("Deve gerar cenário completo via BMAD workflow")
+    void deveGerarCenarioCompletoViaBMAD() {
+        // Arrange
+        when(qaWorkflowService.executarWorkflow(any(CenarioRequest.class)))
+                .thenReturn(expectedResponse);
 
-        when(aiProviderResolver.getActiveProvider()).thenReturn(activeProvider);
-        when(activeProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaIaComSeisCenarios());
-        when(cenarioRepository.save(any(Cenario.class))).thenAnswer(invocation -> {
-            Cenario salvo = invocation.getArgument(0);
-            salvo.setId("cenario-123");
-            return salvo;
-        });
+        // Act
+        CenarioResponse response = service.gerarCenarioCompleto(request);
 
-        CenarioResponse response = cenarioService.gerarCenarioCompleto(request);
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.id()).isEqualTo("123");
+        assertThat(response.titulo()).isEqualTo("Login OAuth");
 
-        assertNotNull(response);
-        assertEquals(6, response.cenarios().size());
-
-        ArgumentCaptor<Cenario> captor = ArgumentCaptor.forClass(Cenario.class);
-        verify(cenarioRepository).save(captor.capture());
-        assertEquals(6, captor.getValue().getCenarios().size());
-        verify(aiProviderResolver, never()).getFallbackProvider();
+        verify(qaWorkflowService, times(1)).executarWorkflow(request);
+        verify(fallbackFactory, never()).criar(any());
     }
 
-    private String respostaIaComSeisCenarios() {
-        StringBuilder sb = new StringBuilder();
+    @Test
+    @DisplayName("Deve aplicar fallback quando workflow falhar")
+    void deveAplicarFallbackQuandoWorkflowFalhar() {
+        // Arrange
+        when(qaWorkflowService.executarWorkflow(any()))
+                .thenThrow(new RuntimeException("Erro no workflow"));
 
-        for (int i = 1; i <= 6; i++) {
-            if (i > 1) {
-                sb.append("\n---\n");
-            }
-            sb.append("Nome: Cenario ").append(i).append("\n")
-                    .append("Objetivo: Validar fluxo ").append(i).append("\n")
-                    .append("Precondição: Ambiente pronto\n")
-                    .append("Script de Teste (Passo-a-Passo): Dado usuario autenticado\\nQuando realiza a acao\n")
-                    .append("Script de Teste (Passo-a-Passo) - Resultado: Entao operacao concluida\n")
-                    .append("Variáveis: Nao se aplica\n")
-                    .append("Componente: Backend\n")
-                    .append("Rótulos: regressao\n")
-                    .append("Propósito: Cobertura funcional\n")
-                    .append("Pasta: Funcionalidade > Pagamento\n")
-                    .append("Proprietário: JIRAUSER23105\n")
-                    .append("Cobertura: REG-").append(i).append("\n")
-                    .append("Status: APPROVED\n");
-        }
+        Cenario cenarioFallback = new Cenario();
+        cenarioFallback.setId("fallback-123");
+        cenarioFallback.setTitulo("Login OAuth");
+        cenarioFallback.setCenarios(List.of(new CenarioItem()));
 
-        return sb.toString();
+        when(fallbackFactory.criar(any())).thenReturn(cenarioFallback);
+        when(cenarioRepository.save(any(Cenario.class))).thenReturn(cenarioFallback);
+
+        // Act
+        CenarioResponse response = service.gerarCenarioCompleto(request);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.id()).isEqualTo("fallback-123");
+
+        verify(qaWorkflowService, times(1)).executarWorkflow(any());
+        verify(fallbackFactory, times(1)).criar(request);
+        verify(cenarioRepository, times(1)).save(any(Cenario.class));
+    }
+
+    @Test
+    @DisplayName("Deve listar todos os cenários")
+    void deveListarTodosCenarios() {
+        // Arrange
+        Cenario cenario1 = new Cenario();
+        cenario1.setId("1");
+        Cenario cenario2 = new Cenario();
+        cenario2.setId("2");
+
+        when(cenarioRepository.findAll()).thenReturn(List.of(cenario1, cenario2));
+
+        // Act
+        List<Cenario> cenarios = service.listarCenarios();
+
+        // Assert
+        assertThat(cenarios).hasSize(2);
+        verify(cenarioRepository, times(1)).findAll();
+    }
+
+    @Test
+    @DisplayName("Deve buscar cenário por ID")
+    void deveBuscarCenarioPorId() {
+        // Arrange
+        Cenario cenario = new Cenario();
+        cenario.setId("123");
+        cenario.setTitulo("Login OAuth");
+
+        when(cenarioRepository.findById("123")).thenReturn(Optional.of(cenario));
+
+        // Act
+        Cenario resultado = service.buscarCenario("123");
+
+        // Assert
+        assertThat(resultado).isNotNull();
+        assertThat(resultado.getId()).isEqualTo("123");
+        assertThat(resultado.getTitulo()).isEqualTo("Login OAuth");
+
+        verify(cenarioRepository, times(1)).findById("123");
+    }
+
+    @Test
+    @DisplayName("Deve excluir cenário por ID")
+    void deveExcluirCenarioPorId() {
+        // Arrange
+        doNothing().when(cenarioRepository).deleteById("123");
+
+        // Act
+        service.excluirCenario("123");
+
+        // Assert
+        verify(cenarioRepository, times(1)).deleteById("123");
     }
 }
-
