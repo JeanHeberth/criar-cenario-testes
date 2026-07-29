@@ -24,6 +24,7 @@ public class QaWorkflowService {
     private final TestPlanAgent testPlanAgent;
     private final TestScenarioAgent testScenarioAgent;
     private final RedundancyReviewAgent redundancyReviewAgent;
+    private final BddFormatterAgent bddFormatterAgent;
     private final ZephyrFormatterAgent zephyrFormatterAgent;
     
     private final AgentLoaderService agentLoaderService;
@@ -72,6 +73,7 @@ public class QaWorkflowService {
                 testPlanAgent,
                 testScenarioAgent,
                 redundancyReviewAgent,
+                bddFormatterAgent,
                 zephyrFormatterAgent
             );
             
@@ -79,11 +81,13 @@ public class QaWorkflowService {
                 requirementAnalysisAgent,
                 testPlanAgent,
                 testScenarioAgent,
+                bddFormatterAgent,
                 zephyrFormatterAgent
             );
             
             case REVISAO -> List.of(
                 redundancyReviewAgent,
+                bddFormatterAgent,
                 zephyrFormatterAgent
             );
             
@@ -91,6 +95,7 @@ public class QaWorkflowService {
                 requirementAnalysisAgent,
                 testPlanAgent,
                 testScenarioAgent,
+                bddFormatterAgent,
                 zephyrFormatterAgent
             );
         };

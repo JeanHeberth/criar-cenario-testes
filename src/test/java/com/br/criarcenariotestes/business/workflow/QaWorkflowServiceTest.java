@@ -46,6 +46,9 @@ class QaWorkflowServiceTest {
     private RedundancyReviewAgent redundancyReviewAgent;
 
     @Mock
+    private BddFormatterAgent bddFormatterAgent;
+
+    @Mock
     private ZephyrFormatterAgent zephyrFormatterAgent;
 
     @Mock
@@ -75,11 +78,12 @@ class QaWorkflowServiceTest {
         when(testPlanAgent.getNome()).thenReturn("Test Planning Agent");
         when(testScenarioAgent.getNome()).thenReturn("Test Scenario Generator");
         when(redundancyReviewAgent.getNome()).thenReturn("Redundancy Reviewer");
+        when(bddFormatterAgent.getNome()).thenReturn("BDD Formatter");
         when(zephyrFormatterAgent.getNome()).thenReturn("Zephyr Formatter");
     }
 
     @Test
-    @DisplayName("Deve executar workflow COMPLETO com todos os 6 agentes")
+    @DisplayName("Deve executar workflow COMPLETO com todos os 7 agentes")
     void deveExecutarWorkflowCompleto() {
         // Arrange
         mockAgentesHabilitados();
@@ -97,6 +101,7 @@ class QaWorkflowServiceTest {
         verify(testPlanAgent, times(1)).executar(any(WorkflowContext.class));
         verify(testScenarioAgent, times(1)).executar(any(WorkflowContext.class));
         verify(redundancyReviewAgent, times(1)).executar(any(WorkflowContext.class));
+        verify(bddFormatterAgent, times(1)).executar(any(WorkflowContext.class));
         verify(zephyrFormatterAgent, times(1)).executar(any(WorkflowContext.class));
         verify(cenarioRepository, times(1)).save(any(Cenario.class));
     }
@@ -121,11 +126,12 @@ class QaWorkflowServiceTest {
         verify(testPlanAgent, times(1)).executar(any());
         verify(testScenarioAgent, times(1)).executar(any());
         verify(redundancyReviewAgent, never()).executar(any());
+        verify(bddFormatterAgent, times(1)).executar(any());
         verify(zephyrFormatterAgent, times(1)).executar(any());
     }
 
     @Test
-    @DisplayName("Deve executar workflow REVISAO apenas com 2 agentes")
+    @DisplayName("Deve executar workflow REVISAO apenas com 3 agentes")
     void deveExecutarWorkflowRevisao() {
         // Arrange
         mockAgentesHabilitados();
@@ -142,6 +148,7 @@ class QaWorkflowServiceTest {
         verify(testPlanAgent, never()).executar(any());
         verify(testScenarioAgent, never()).executar(any());
         verify(redundancyReviewAgent, times(1)).executar(any());
+        verify(bddFormatterAgent, times(1)).executar(any());
         verify(zephyrFormatterAgent, times(1)).executar(any());
     }
 
@@ -232,6 +239,7 @@ class QaWorkflowServiceTest {
         when(testPlanAgent.isEnabled(any())).thenReturn(true);
         when(testScenarioAgent.isEnabled(any())).thenReturn(true);
         when(redundancyReviewAgent.isEnabled(any())).thenReturn(true);
+        when(bddFormatterAgent.isEnabled(any())).thenReturn(true);
         when(zephyrFormatterAgent.isEnabled(any())).thenReturn(true);
     }
 
