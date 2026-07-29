@@ -2,13 +2,16 @@ package com.br.criarcenariotestes.controller;
 
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
+import com.br.criarcenariotestes.business.dto.WorkflowInfoResponse;
 import com.br.criarcenariotestes.business.service.CenarioService;
+import com.br.criarcenariotestes.business.workflow.WorkflowType;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Arrays;
 import java.util.List;
 
 @RestController
@@ -22,6 +25,13 @@ public class CenarioController {
     @PostMapping
     public CenarioResponse gerarCenario(@RequestBody CenarioRequest cenarioRequest) {
         return cenarioService.gerarCenarioCompleto(cenarioRequest);
+    }
+    
+    @GetMapping("/workflows")
+    public List<WorkflowInfoResponse> listarWorkflows() {
+        return Arrays.stream(WorkflowType.values())
+                .map(WorkflowInfoResponse::from)
+                .toList();
     }
 
     @GetMapping

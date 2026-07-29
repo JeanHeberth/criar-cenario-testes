@@ -8,6 +8,8 @@ import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.fallback.CenarioFallbackFactory;
 import com.br.criarcenariotestes.business.parser.CenarioTextoParser;
 import com.br.criarcenariotestes.business.prompt.PromptFactory;
+import com.br.criarcenariotestes.business.workflow.QaWorkflowService;
+import com.br.criarcenariotestes.business.workflow.WorkflowType;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import com.br.criarcenariotestes.infrastructure.repository.CenarioRepository;
@@ -35,12 +37,30 @@ public class CenarioService {
     private final CenarioTextoParser cenarioTextoParser;
     private final CenarioFallbackFactory fallbackFactory;
     private final AgentLoaderService agentLoaderService;
+    private final QaWorkflowService qaWorkflowService;
 
     public CenarioResponse gerarCenarioCompleto(CenarioRequest request) {
+        log.info("Iniciando geracao de cenarios via BMAD Workflow. titulo='{}', agent='{}', workflow='{}'",
+                request.titulo(),
+                request.agent(),
+                request.workflowType());
+
+        try {
+            return qaWorkflowService.executarWorkflow(request);
+        } catch (Exception e) {
+            log.warn("Workflow BMAD falhou. titulo='{}', agent='{}', erro='{}'",
+                    request.titulo(), request.agent(), e.getMessage(), e);
+            log.info("Aplicando fallback local...");
+            return salvarFallback(request);
+        }
+    }
+    
+    @Deprecated
+    public CenarioResponse gerarCenarioCompletoLegacy(CenarioRequest request) {
         String systemPrompt = buildSystemPrompt(request.agent());
         String userPrompt = PromptFactory.getUserPrompt(request.titulo(), request.regraDeNegocio());
 
-        log.info("Iniciando geracao de cenarios. titulo='{}', agent='{}', systemPromptLength={}, userPromptLength={}",
+        log.info("Iniciando geracao de cenarios (modo legado). titulo='{}', agent='{}', systemPromptLength={}, userPromptLength={}",
                 request.titulo(),
                 request.agent(),
                 tamanho(systemPrompt),
@@ -184,6 +204,7 @@ public class CenarioService {
             String agent,
             List<MultipartFile> arquivos
     ) {
+        log.info("Processando PDFs para contexto. titulo='{}', arquivos={}", titulo, arquivos.size());
 
         StringBuilder contextoCompleto = new StringBuilder();
 
@@ -201,34 +222,17 @@ public class CenarioService {
             }
         }
 
-        String systemPrompt = buildSystemPrompt(agent);
-        String userPrompt = PromptFactory.getUserPromptComContexto(
-                titulo,
-                regra,
-                contextoCompleto.toString()
-        );
+        String regraComContexto = regra + "\n\n" + contextoCompleto.toString();
+        CenarioRequest request = new CenarioRequest(titulo, regraComContexto, agent);
 
         try {
-            AiProvider provider = aiProviderResolver.getActiveProvider();
-            log.info("Chamando provider principal com PDF: {}", provider.getName());
-            String resposta = tentarComRetry(provider, systemPrompt, userPrompt);
-            return salvarResposta(new CenarioRequest(titulo, regra, agent), resposta, provider.getName());
+            return qaWorkflowService.executarWorkflow(request);
         } catch (Exception e) {
-            log.warn("Provider principal falhou na geracao com PDF. titulo='{}', agent='{}', erro='{}'",
+            log.warn("Workflow BMAD com PDF falhou. titulo='{}', agent='{}', erro='{}'",
                     titulo, agent, e.getMessage(), e);
+            log.info("Aplicando fallback local...");
+            return salvarFallback(request);
         }
-
-        try {
-            AiProvider fallbackProvider = aiProviderResolver.getFallbackProvider();
-            log.info("Chamando provider fallback com PDF: {}", fallbackProvider.getName());
-            String resposta = tentarComRetry(fallbackProvider, systemPrompt, userPrompt);
-            return salvarResposta(new CenarioRequest(titulo, regra, agent), resposta, fallbackProvider.getName());
-        } catch (Exception e) {
-            log.warn("Provider fallback falhou na geracao com PDF. titulo='{}', agent='{}', erro='{}'",
-                    titulo, agent, e.getMessage(), e);
-        }
-
-        return salvarFallback(new CenarioRequest(titulo, regra, agent));
     }
 
     private String buildSystemPrompt(String agent) {
