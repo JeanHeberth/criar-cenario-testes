@@ -28,12 +28,29 @@ public class CenarioTextoParser {
                 continue;
             }
 
+            // Extrair campos com múltiplos formatos possíveis
+            String nome = extrairCampoMultiplo(texto, "Nome");
+            String objetivo = extrairCampoMultiplo(texto, "Objetivo");
+            String precondicao = extrairCampoMultiplo(texto, "Pré-condições", "Precondição", "Pré-condição");
+            String passos = extrairCampoMultiplo(texto, "Passos", "Script de Teste \\(Passo-a-Passo\\)");
+            String resultadoEsperado = extrairCampoMultiplo(texto, "Resultado esperado", "Script de Teste \\(Passo-a-Passo\\) - Resultado");
+            
+            // Fallback: se nome contém tudo, tentar extrair do texto corrido
+            if (nome.contains("Objetivo:") || nome.contains("Pré-condições:") || nome.contains("Passos:")) {
+                objetivo = extrairTextoEntre(nome, "Objetivo:", "Pré-condições:", "Passos:");
+                precondicao = extrairTextoEntre(nome, "Pré-condições:", "Passos:", "Resultado esperado:");
+                passos = extrairTextoEntre(nome, "Passos:", "Resultado esperado:", "Tipo:", "Prioridade:");
+                resultadoEsperado = extrairTextoEntre(nome, "Resultado esperado:", "Tipo:", "Prioridade:", "Tags:");
+                // Limpar nome para conter apenas o nome real
+                nome = extrairTextoAte(nome, "Objetivo:", "Pré-condições:");
+            }
+            
             CenarioItem item = CenarioItem.builder()
-                    .nome(extrairCampo(texto, "Nome"))
-                    .objetivo(extrairCampo(texto, "Objetivo"))
-                    .precondicao(extrairCampo(texto, "Precondição"))
-                    .scriptTeste(extrairCampo(texto, "Script de Teste \\(Passo-a-Passo\\)"))
-                    .resultadoEsperado(extrairCampo(texto, "Script de Teste \\(Passo-a-Passo\\) - Resultado"))
+                    .nome(nome)
+                    .objetivo(objetivo)
+                    .precondicao(precondicao)
+                    .scriptTeste(passos)
+                    .resultadoEsperado(resultadoEsperado)
                     .variaveis(valorOuPadrao(extrairCampo(texto, "Variáveis"), "Não se aplica"))
                     .componente(extrairCampo(texto, "Componente"))
                     .rotulos(extrairCampo(texto, "Rótulos"))
@@ -60,9 +77,16 @@ public class CenarioTextoParser {
         String[] campos = {
                 "Nome",
                 "Objetivo",
+                "Pré-condições",
+                "Pré-condição",
                 "Precondição",
+                "Passos",
                 "Script de Teste \\(Passo-a-Passo\\)",
+                "Resultado esperado",
                 "Script de Teste \\(Passo-a-Passo\\) - Resultado",
+                "Tipo",
+                "Prioridade",
+                "Tags",
                 "Variáveis",
                 "Componente",
                 "Rótulos",
@@ -107,6 +131,55 @@ public class CenarioTextoParser {
         }
 
         return "";
+    }
+    
+    private String extrairCampoMultiplo(String bloco, String... possiveisNomes) {
+        for (String nome : possiveisNomes) {
+            String valor = extrairCampo(bloco, nome);
+            if (valor != null && !valor.isBlank()) {
+                return valor;
+            }
+        }
+        return "";
+    }
+    
+    private String extrairTextoEntre(String texto, String inicio, String... possiveisFins) {
+        if (texto == null || texto.isBlank()) {
+            return "";
+        }
+        
+        int idxInicio = texto.indexOf(inicio);
+        if (idxInicio == -1) {
+            return "";
+        }
+        
+        idxInicio += inicio.length();
+        
+        int idxFim = texto.length();
+        for (String fim : possiveisFins) {
+            int idx = texto.indexOf(fim, idxInicio);
+            if (idx != -1 && idx < idxFim) {
+                idxFim = idx;
+            }
+        }
+        
+        return texto.substring(idxInicio, idxFim).trim();
+    }
+    
+    private String extrairTextoAte(String texto, String... possiveisFins) {
+        if (texto == null || texto.isBlank()) {
+            return "";
+        }
+        
+        int idxFim = texto.length();
+        for (String fim : possiveisFins) {
+            int idx = texto.indexOf(fim);
+            if (idx != -1 && idx < idxFim) {
+                idxFim = idx;
+            }
+        }
+        
+        return texto.substring(0, idxFim).trim();
     }
 
     private String valorOuPadrao(String valor, String padrao) {
