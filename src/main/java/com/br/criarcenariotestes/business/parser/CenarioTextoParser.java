@@ -10,6 +10,8 @@ import java.util.regex.Pattern;
 @Component
 public class CenarioTextoParser {
 
+    private static final Pattern NOME_CAMPO_PATTERN = Pattern.compile("(?i)\\bnome\\s*:");
+
     public List<CenarioItem> parsear(String resposta) {
         List<CenarioItem> itens = new ArrayList<>();
 
@@ -17,12 +19,12 @@ public class CenarioTextoParser {
             return itens;
         }
 
-        String[] blocos = resposta.split("(?m)^---\\s*$");
+        String[] blocos = resposta.split("(?m)^\\s*---+\\s*$");
 
         for (String bloco : blocos) {
             String texto = bloco.trim();
 
-            if (!texto.contains("Nome:")) {
+            if (!NOME_CAMPO_PATTERN.matcher(texto).find()) {
                 continue;
             }
 

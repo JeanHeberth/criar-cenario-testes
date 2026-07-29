@@ -59,6 +59,13 @@ bootWar {
     archiveFileName = "${project.name}.war"
 }
 
+processResources {
+    from("${projectDir}/agents") {
+        into "agents"
+        include "*.agent.md"
+    }
+}
+
 test {
     useJUnitPlatform()
 }

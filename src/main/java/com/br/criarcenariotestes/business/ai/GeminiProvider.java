@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,6 +46,13 @@ public class GeminiProvider implements AiProvider {
                 + ":generateContent?key="
                 + properties.getApiKey();
 
+        log.info("Gemini request. model='{}', url='{}', maxOutputTokens={}, systemPromptLength={}, historySize={}",
+                properties.getModel(),
+                properties.getUrl(),
+                properties.getMaxOutputTokens(),
+                systemPrompt == null ? 0 : systemPrompt.length(),
+                history == null ? 0 : history.size());
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -73,10 +81,14 @@ public class GeminiProvider implements AiProvider {
             ));
         }
 
-        Map<String, Object> requestBody = Map.of(
-                "contents", contents,
-                "generationConfig", Map.of("temperature", 0.7)
-        );
+        Map<String, Object> generationConfig = new HashMap<>();
+        generationConfig.put("temperature", 0.7);
+        // Evita truncar resposta e perder cenarios na saida.
+        generationConfig.put("maxOutputTokens", properties.getMaxOutputTokens());
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("contents", contents);
+        requestBody.put("generationConfig", generationConfig);
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
@@ -92,6 +104,11 @@ public class GeminiProvider implements AiProvider {
                     .get(0)
                     .path("text")
                     .asText();
+
+            log.info("Gemini response recebida. model='{}', responseLength={}, preview='{}'",
+                    properties.getModel(),
+                    result == null ? 0 : result.length(),
+                    gerarPreview(result));
 
             if (result == null || result.isBlank()) {
                 throw new RuntimeException("Resposta vazia do Gemini");
@@ -116,5 +133,14 @@ public class GeminiProvider implements AiProvider {
         if (properties.getUrl() == null || properties.getUrl().isBlank()) {
             throw new IllegalStateException("URL Gemini não configurada");
         }
+    }
+
+    private String gerarPreview(String valor) {
+        if (valor == null || valor.isBlank()) {
+            return "";
+        }
+
+        String normalizado = valor.replaceAll("\\s+", " ").trim();
+        return normalizado.length() <= 250 ? normalizado : normalizado.substring(0, 250) + "...";
     }
 }

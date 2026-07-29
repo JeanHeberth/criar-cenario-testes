@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -39,6 +40,13 @@ public class OpenAiProvider implements AiProvider {
     public String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history) {
         validarConfiguracao();
 
+        log.info("OpenAI request. model='{}', url='{}', maxTokens={}, systemPromptLength={}, historySize={}",
+                properties.getModel(),
+                properties.getUrl(),
+                properties.getMaxTokens(),
+                systemPrompt == null ? 0 : systemPrompt.length(),
+                history == null ? 0 : history.size());
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(properties.getApiKey());
@@ -53,11 +61,12 @@ public class OpenAiProvider implements AiProvider {
         // Histórico completo (OpenAI já aceita role: user/assistant diretamente)
         messages.addAll(history);
 
-        Map<String, Object> requestBody = Map.of(
-                "model", properties.getModel(),
-                "messages", messages,
-                "temperature", 0.7
-        );
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", properties.getModel());
+        requestBody.put("messages", messages);
+        requestBody.put("temperature", 0.7);
+        // Evita truncar resposta e perder cenarios na saida.
+        requestBody.put("max_tokens", properties.getMaxTokens());
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
@@ -71,6 +80,11 @@ public class OpenAiProvider implements AiProvider {
                     .path("message")
                     .path("content")
                     .asText();
+
+            log.info("OpenAI response recebida. model='{}', responseLength={}, preview='{}'",
+                    properties.getModel(),
+                    result == null ? 0 : result.length(),
+                    gerarPreview(result));
 
             if (result == null || result.isBlank()) {
                 throw new RuntimeException("Resposta vazia da OpenAI");
@@ -95,5 +109,14 @@ public class OpenAiProvider implements AiProvider {
         if (properties.getUrl() == null || properties.getUrl().isBlank()) {
             throw new IllegalStateException("URL OpenAI não configurada");
         }
+    }
+
+    private String gerarPreview(String valor) {
+        if (valor == null || valor.isBlank()) {
+            return "";
+        }
+
+        String normalizado = valor.replaceAll("\\s+", " ").trim();
+        return normalizado.length() <= 250 ? normalizado : normalizado.substring(0, 250) + "...";
     }
 }

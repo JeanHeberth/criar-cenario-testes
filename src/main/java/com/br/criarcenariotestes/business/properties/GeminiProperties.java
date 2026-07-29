@@ -14,4 +14,5 @@ public class GeminiProperties {
     private String apiKey;
     private String model;
     private String url;
+    private Integer maxOutputTokens = 4000;
 }
