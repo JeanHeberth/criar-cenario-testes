@@ -2,6 +2,9 @@ spring:
   application:
     name: criar-cenario-testes
 
+  main:
+    headless: false
+
   data:
     mongodb:
       uri: ${MONGO_URI_NUVEM}
@@ -43,3 +46,16 @@ logging:
   level:
     root: INFO
     br.com: DEBUG
+
+auto-qa:
+  enabled: true
+  allowed-roots: []
+  max-files: 500
+  max-file-size-kb: 500
+  max-total-content-kb: 5000
+  max-generation-retries: 3
+  max-execution-minutes: 10
+  generated-directory: .auto-qa/generated
+  backup-directory: .auto-qa/backups
+  allow-command-execution: true
+  allow-file-application: true
