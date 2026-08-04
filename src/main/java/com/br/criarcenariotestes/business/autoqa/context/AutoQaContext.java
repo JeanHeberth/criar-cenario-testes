@@ -2,6 +2,7 @@ package com.br.criarcenariotestes.business.autoqa.context;
 
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ public class AutoQaContext {
     private LocalDateTime finishedAt;
     private AutoQaStatus status;
     private String currentAgent;
+    private ProjectDiscoveryResult projectDiscoveryResult;
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
@@ -30,6 +32,7 @@ public class AutoQaContext {
         this.status = AutoQaStatus.CREATED;
         this.finishedAt = null;
         this.currentAgent = null;
+        this.projectDiscoveryResult = null;
         this.agentExecutions = new ArrayList<>();
         this.errors = new ArrayList<>();
     }
@@ -74,6 +77,10 @@ public class AutoQaContext {
         return Collections.unmodifiableList(errors);
     }
 
+    public ProjectDiscoveryResult getProjectDiscoveryResult() {
+        return projectDiscoveryResult;
+    }
+
     public void startWorkflow() {
         this.status = AutoQaStatus.RUNNING;
         this.finishedAt = null;
@@ -102,6 +109,16 @@ public class AutoQaContext {
         this.status = AutoQaStatus.ERROR;
         this.currentAgent = null;
         this.finishedAt = LocalDateTime.now();
+    }
+
+    public void registerProjectDiscovery(ProjectDiscoveryResult result) {
+        if (result == null) {
+            throw new NullPointerException("result must not be null");
+        }
+        if (this.projectDiscoveryResult != null) {
+            throw new IllegalStateException("Project discovery already registered");
+        }
+        this.projectDiscoveryResult = result;
     }
 
     private String requireText(String value, String fieldName) {
