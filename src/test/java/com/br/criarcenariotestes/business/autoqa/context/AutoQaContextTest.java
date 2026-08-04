@@ -9,6 +9,10 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.DiscoveryConfid
 import com.br.criarcenariotestes.business.autoqa.model.discovery.PackageManager;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.TestingFramework;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisStatus;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioStep;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -219,5 +223,88 @@ class AutoQaContextTest {
         assertThatThrownBy(() -> context.registerProjectDiscovery(result))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve registrar resultado da análise do cenário")
+    void deveRegistrarResultadoDaAnaliseDoCenario() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        ScenarioAnalysisResult analysis = sampleAnalysis();
+
+        context.registerScenarioAnalysis(analysis);
+
+        assertThat(context.getScenarioAnalysisResult()).isEqualTo(analysis);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar resultado da análise nulo")
+    void deveRejeitarResultadoDaAnaliseNulo() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+
+        assertThatThrownBy(() -> context.registerScenarioAnalysis(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir descoberta antes da análise")
+    void deveExigirDescobertaAntesDaAnalise() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerScenarioAnalysis(sampleAnalysis()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segunda análise na mesma execução")
+    void deveRejeitarSegundaAnaliseNaMesmaExecucao() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        ScenarioAnalysisResult analysis = sampleAnalysis();
+
+        context.registerScenarioAnalysis(analysis);
+
+        assertThatThrownBy(() -> context.registerScenarioAnalysis(analysis))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("analysis");
+    }
+
+    private ProjectDiscoveryResult sampleDiscovery() {
+        return new ProjectDiscoveryResult(
+                Path.of("/projeto"),
+                AutomationFramework.PLAYWRIGHT,
+                AutomationLanguage.TYPESCRIPT,
+                PackageManager.NPM,
+                BuildTool.NPM,
+                Set.of(TestingFramework.PLAYWRIGHT_TEST),
+                Set.of(AutomationFramework.PLAYWRIGHT),
+                List.of("PLAYWRIGHT"),
+                "playwright.config.ts",
+                List.of("playwright.config.ts"),
+                List.of(),
+                DiscoveryConfidence.HIGH,
+                true
+        );
+    }
+
+    private ScenarioAnalysisResult sampleAnalysis() {
+        return new ScenarioAnalysisResult(
+                "Login válido",
+                "Validar acesso",
+                List.of("Usuário cadastrado"),
+                List.of(new ScenarioStep(1, "Acessar a tela de login", "A tela é exibida", List.of())),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of("Usuário"),
+                List.of(),
+                AutomationType.WEB_UI,
+                ScenarioAnalysisStatus.VALID,
+                List.of(),
+                true
+        );
     }
 }
