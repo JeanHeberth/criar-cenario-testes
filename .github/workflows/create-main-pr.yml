@@ -1,0 +1,47 @@
+name: Criar PR Develop para Main
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - closed
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  criar-pull-request:
+    name: Criar PR para Main
+    runs-on: ubuntu-latest
+
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Criar ou localizar PR de develop para main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING_PR=$(gh pr list \
+            --base main \
+            --head develop \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Já existe o Pull Request #$EXISTING_PR de develop para main."
+            exit 0
+          fi
+
+          if git ls-remote --exit-code origin refs/heads/develop > /dev/null 2>&1; then
+            gh pr create \
+              --base main \
+              --head develop \
+              --title "Promover develop para main" \
+              --body "Pull Request criado automaticamente após o merge de alterações na branch develop."
+          else
+            echo "A branch develop não foi encontrada."
+            exit 1
+          fi
