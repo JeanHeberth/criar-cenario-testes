@@ -2,10 +2,20 @@ package com.br.criarcenariotestes.business.autoqa.context;
 
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationFramework;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationLanguage;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.BuildTool;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.DiscoveryConfidence;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.PackageManager;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.TestingFramework;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -148,5 +158,66 @@ class AutoQaContextTest {
         context.finishSuccessfully();
 
         assertThat(context.getCurrentAgent()).isNull();
+    }
+
+    @Test
+    @DisplayName("Deve registrar resultado da descoberta")
+    void deveRegistrarResultadoDaDescoberta() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        ProjectDiscoveryResult result = new ProjectDiscoveryResult(
+                Path.of("/projeto"),
+                AutomationFramework.PLAYWRIGHT,
+                AutomationLanguage.TYPESCRIPT,
+                PackageManager.NPM,
+                BuildTool.NPM,
+                Set.of(TestingFramework.PLAYWRIGHT_TEST),
+                Set.of(AutomationFramework.PLAYWRIGHT),
+                List.of("PLAYWRIGHT"),
+                "playwright.config.ts",
+                List.of("playwright.config.ts"),
+                List.of(),
+                DiscoveryConfidence.HIGH,
+                true
+        );
+
+        context.registerProjectDiscovery(result);
+
+        assertThat(context.getProjectDiscoveryResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar resultado da descoberta nulo")
+    void deveRejeitarResultadoDaDescobertaNulo() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerProjectDiscovery(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segunda descoberta na mesma execução")
+    void deveRejeitarSegundaDescobertaNaMesmaExecucao() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        ProjectDiscoveryResult result = new ProjectDiscoveryResult(
+                Path.of("/projeto"),
+                AutomationFramework.UNKNOWN,
+                AutomationLanguage.UNKNOWN,
+                PackageManager.UNKNOWN,
+                BuildTool.UNKNOWN,
+                Set.of(),
+                Set.of(),
+                List.of(),
+                null,
+                List.of(),
+                List.of(),
+                DiscoveryConfidence.UNKNOWN,
+                true
+        );
+
+        context.registerProjectDiscovery(result);
+
+        assertThatThrownBy(() -> context.registerProjectDiscovery(result))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
     }
 }
