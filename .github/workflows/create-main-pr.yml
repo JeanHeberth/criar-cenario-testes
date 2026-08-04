@@ -6,6 +6,7 @@ on:
       - develop
     types:
       - closed
+
 permissions:
   contents: read
   pull-requests: write
