@@ -1,0 +1,37 @@
+name: Auto Merge Develop para Main
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - closed
+
+jobs:
+  merge-para-main:
+    name: Merge automático para Main
+    runs-on: ubuntu-latest
+
+    # Só executa se o PR para a develop tiver sido mesclado com sucesso
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar o Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Mesclar develop na main e fazer o push
+        run: |
+          git checkout main
+          
+          git pull origin main
+          
+          git merge origin/develop --no-ff -m "Automated merge: develop into main (PR #${{ github.event.pull_request.number }})"
+
+          git push origin main
