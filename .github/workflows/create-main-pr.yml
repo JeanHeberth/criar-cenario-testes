@@ -6,7 +6,6 @@ on:
       - develop
     types:
       - closed
-
 permissions:
   contents: read
   pull-requests: write
@@ -19,11 +18,17 @@ jobs:
     if: github.event.pull_request.merged == true
 
     steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Criar ou localizar PR de develop para main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           EXISTING_PR=$(gh pr list \
+            --repo "${{ github.repository }}" \
             --base main \
             --head develop \
             --state open \
@@ -35,13 +40,18 @@ jobs:
             exit 0
           fi
 
-          if git ls-remote --exit-code origin refs/heads/develop > /dev/null 2>&1; then
-            gh pr create \
-              --base main \
-              --head develop \
-              --title "Promover develop para main" \
-              --body "Pull Request criado automaticamente após o merge de alterações na branch develop."
-          else
-            echo "A branch develop não foi encontrada."
-            exit 1
+          COMMITS_AHEAD=$(git rev-list --count origin/main..origin/develop)
+
+          if [ "$COMMITS_AHEAD" -eq 0 ]; then
+            echo "A branch develop não possui alterações novas em relação à main."
+            exit 0
           fi
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --head develop \
+            --title "Promover develop para main" \
+            --body "Pull Request criado automaticamente após o merge de alterações na branch develop."
+
+          echo "Pull Request de develop para main criado com sucesso."
