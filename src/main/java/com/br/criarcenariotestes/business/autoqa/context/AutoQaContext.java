@@ -3,6 +3,7 @@ package com.br.criarcenariotestes.business.autoqa.context;
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ public class AutoQaContext {
     private AutoQaStatus status;
     private String currentAgent;
     private ProjectDiscoveryResult projectDiscoveryResult;
+    private ScenarioAnalysisResult scenarioAnalysisResult;
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
@@ -33,6 +35,7 @@ public class AutoQaContext {
         this.finishedAt = null;
         this.currentAgent = null;
         this.projectDiscoveryResult = null;
+        this.scenarioAnalysisResult = null;
         this.agentExecutions = new ArrayList<>();
         this.errors = new ArrayList<>();
     }
@@ -81,6 +84,10 @@ public class AutoQaContext {
         return projectDiscoveryResult;
     }
 
+    public ScenarioAnalysisResult getScenarioAnalysisResult() {
+        return scenarioAnalysisResult;
+    }
+
     public void startWorkflow() {
         this.status = AutoQaStatus.RUNNING;
         this.finishedAt = null;
@@ -119,6 +126,19 @@ public class AutoQaContext {
             throw new IllegalStateException("Project discovery already registered");
         }
         this.projectDiscoveryResult = result;
+    }
+
+    public void registerScenarioAnalysis(ScenarioAnalysisResult result) {
+        if (result == null) {
+            throw new NullPointerException("result must not be null");
+        }
+        if (this.projectDiscoveryResult == null) {
+            throw new IllegalStateException("Project discovery must be registered before scenario analysis");
+        }
+        if (this.scenarioAnalysisResult != null) {
+            throw new IllegalStateException("Scenario analysis already registered");
+        }
+        this.scenarioAnalysisResult = result;
     }
 
     private String requireText(String value, String fieldName) {
