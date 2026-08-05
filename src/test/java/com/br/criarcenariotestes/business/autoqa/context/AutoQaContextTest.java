@@ -20,7 +20,11 @@ import com.br.criarcenariotestes.business.autoqa.model.knowledge.SourceLanguage;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisStatus;
+import com.br.criarcenariotestes.business.autoqa.model.planning.PlanningConfidence;
+import com.br.criarcenariotestes.business.autoqa.model.planning.PlanningStatus;
+import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioStep;
+import com.br.criarcenariotestes.business.autoqa.planning.PlanningTestData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -411,5 +415,69 @@ class AutoQaContextTest {
                 KnowledgeStatus.COMPLETE,
                 true
         );
+    }
+
+    // ---- TechnicalPlan tests ----
+
+    @Test
+    @DisplayName("Deve registrar technical plan após knowledge")
+    void deveRegistrarTechnicalPlan() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+        context.registerTechnicalPlan(PlanningTestData.readyPlan());
+        assertThat(context.getTechnicalPlanResult()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan nulo")
+    void deveRejeitarTechnicalPlanNulo() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+        assertThatThrownBy(() -> context.registerTechnicalPlan(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan sem knowledge")
+    void deveRejeitarTechnicalPlanSemKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        assertThatThrownBy(() -> context.registerTechnicalPlan(PlanningTestData.readyPlan()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("knowledge");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan sem discovery")
+    void deveRejeitarTechnicalPlanSemDiscovery() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThatThrownBy(() -> context.registerTechnicalPlan(PlanningTestData.readyPlan()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan duplicado")
+    void deveRejeitarTechnicalPlanDuplicado() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+        context.registerTechnicalPlan(PlanningTestData.readyPlan());
+        assertThatThrownBy(() -> context.registerTechnicalPlan(PlanningTestData.readyPlan()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para technical plan não registrado")
+    void deveRetornarNullParaTechnicalPlanNaoRegistrado() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getTechnicalPlanResult()).isNull();
     }
 }
