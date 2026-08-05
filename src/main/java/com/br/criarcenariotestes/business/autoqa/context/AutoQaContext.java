@@ -4,6 +4,7 @@ import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
+import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 
 import java.time.LocalDateTime;
@@ -25,6 +26,7 @@ public class AutoQaContext {
     private ProjectDiscoveryResult projectDiscoveryResult;
     private ScenarioAnalysisResult scenarioAnalysisResult;
     private ProjectKnowledgeResult projectKnowledgeResult;
+    private TechnicalPlanResult technicalPlanResult;
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
@@ -39,6 +41,7 @@ public class AutoQaContext {
         this.projectDiscoveryResult = null;
         this.scenarioAnalysisResult = null;
         this.projectKnowledgeResult = null;
+        this.technicalPlanResult = null;
         this.agentExecutions = new ArrayList<>();
         this.errors = new ArrayList<>();
     }
@@ -93,6 +96,10 @@ public class AutoQaContext {
 
     public ProjectKnowledgeResult getProjectKnowledgeResult() {
         return projectKnowledgeResult;
+    }
+
+    public TechnicalPlanResult getTechnicalPlanResult() {
+        return technicalPlanResult;
     }
 
     public void startWorkflow() {
@@ -162,6 +169,15 @@ public class AutoQaContext {
             throw new IllegalStateException("Project knowledge already registered");
         }
         this.projectKnowledgeResult = result;
+    }
+
+    public void registerTechnicalPlan(TechnicalPlanResult result) {
+        if (result == null) throw new NullPointerException("result must not be null");
+        if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before technical plan");
+        if (this.scenarioAnalysisResult == null) throw new IllegalStateException("Scenario analysis must be registered before technical plan");
+        if (this.projectKnowledgeResult == null) throw new IllegalStateException("Project knowledge must be registered before technical plan");
+        if (this.technicalPlanResult != null) throw new IllegalStateException("Technical plan already registered");
+        this.technicalPlanResult = result;
     }
 
     private String requireText(String value, String fieldName) {
