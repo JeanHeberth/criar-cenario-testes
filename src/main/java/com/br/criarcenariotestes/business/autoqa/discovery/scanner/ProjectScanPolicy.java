@@ -1,7 +1,10 @@
 package com.br.criarcenariotestes.business.autoqa.discovery.scanner;
 
+import org.springframework.stereotype.Component;
+
 import java.util.Set;
 
+@Component
 public class ProjectScanPolicy {
 
     private static final int MAX_SCAN_DEPTH = 4;
