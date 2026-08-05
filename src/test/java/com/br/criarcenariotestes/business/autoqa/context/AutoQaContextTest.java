@@ -9,10 +9,22 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.DiscoveryConfid
 import com.br.criarcenariotestes.business.autoqa.model.discovery.PackageManager;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.TestingFramework;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ComponentType;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.KnowledgeStatus;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.NamingConvention;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectComponent;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ReuseCandidate;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ReuseConfidence;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.SourceLanguage;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisStatus;
+import com.br.criarcenariotestes.business.autoqa.model.planning.PlanningConfidence;
+import com.br.criarcenariotestes.business.autoqa.model.planning.PlanningStatus;
+import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioStep;
+import com.br.criarcenariotestes.business.autoqa.planning.PlanningTestData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -271,6 +283,66 @@ class AutoQaContextTest {
                 .hasMessageContaining("analysis");
     }
 
+    @Test
+    @DisplayName("Deve registrar ProjectKnowledge")
+    void deveRegistrarProjectKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        ProjectKnowledgeResult knowledge = sampleKnowledge();
+
+        context.registerProjectKnowledge(knowledge);
+
+        assertThat(context.getProjectKnowledgeResult()).isEqualTo(knowledge);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ProjectKnowledge nulo")
+    void deveRejeitarProjectKnowledgeNulo() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir descoberta antes do knowledge")
+    void deveExigirDiscoveryAntesDoKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(sampleKnowledge()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve exigir scenario analysis antes do knowledge")
+    void deveExigirScenarioAnalysisAntesDoKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(sampleKnowledge()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Scenario analysis");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segundo ProjectKnowledge")
+    void deveRejeitarSegundoProjectKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        ProjectKnowledgeResult knowledge = sampleKnowledge();
+
+        context.registerProjectKnowledge(knowledge);
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(knowledge))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("knowledge");
+    }
+
     private ProjectDiscoveryResult sampleDiscovery() {
         return new ProjectDiscoveryResult(
                 Path.of("/projeto"),
@@ -306,5 +378,106 @@ class AutoQaContextTest {
                 List.of(),
                 true
         );
+    }
+
+    private ProjectKnowledgeResult sampleKnowledge() {
+        ProjectComponent component = new ProjectComponent(
+                "src/test/java/com/example/LoginPage.java",
+                "LoginPage",
+                ComponentType.PAGE_OBJECT,
+                SourceLanguage.JAVA,
+                "com.example",
+                List.of("LoginPage"),
+                List.of("open"),
+                List.of("import org.openqa.selenium.By"),
+                List.of("@Page"),
+                List.of("PAGE_OBJECT"),
+                false,
+                true,
+                List.of()
+        );
+        return new ProjectKnowledgeResult(
+                Path.of("/projeto"),
+                List.of(component),
+                List.of(),
+                List.of(component),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(new ReuseCandidate("src/test/java/com/example/LoginPage.java", ComponentType.PAGE_OBJECT, "login", ReuseConfidence.HIGH, List.of("login"))),
+                new NamingConvention("*.java", "*Page.java", "PascalCase", "camelCase", "src/test/java", List.of("src/test/java/com/example/LoginPage.java"), ReuseConfidence.HIGH),
+                List.of("src/test/java"),
+                List.of("src/main/java"),
+                List.of("node_modules"),
+                List.of(),
+                KnowledgeStatus.COMPLETE,
+                true
+        );
+    }
+
+    // ---- TechnicalPlan tests ----
+
+    @Test
+    @DisplayName("Deve registrar technical plan após knowledge")
+    void deveRegistrarTechnicalPlan() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+        context.registerTechnicalPlan(PlanningTestData.readyPlan());
+        assertThat(context.getTechnicalPlanResult()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan nulo")
+    void deveRejeitarTechnicalPlanNulo() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+        assertThatThrownBy(() -> context.registerTechnicalPlan(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan sem knowledge")
+    void deveRejeitarTechnicalPlanSemKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        assertThatThrownBy(() -> context.registerTechnicalPlan(PlanningTestData.readyPlan()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("knowledge");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan sem discovery")
+    void deveRejeitarTechnicalPlanSemDiscovery() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThatThrownBy(() -> context.registerTechnicalPlan(PlanningTestData.readyPlan()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar technical plan duplicado")
+    void deveRejeitarTechnicalPlanDuplicado() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+        context.registerTechnicalPlan(PlanningTestData.readyPlan());
+        assertThatThrownBy(() -> context.registerTechnicalPlan(PlanningTestData.readyPlan()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para technical plan não registrado")
+    void deveRetornarNullParaTechnicalPlanNaoRegistrado() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getTechnicalPlanResult()).isNull();
     }
 }
