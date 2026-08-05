@@ -3,6 +3,7 @@ package com.br.criarcenariotestes.business.autoqa.context;
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
+import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
 import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
@@ -27,6 +28,7 @@ public class AutoQaContext {
     private ScenarioAnalysisResult scenarioAnalysisResult;
     private ProjectKnowledgeResult projectKnowledgeResult;
     private TechnicalPlanResult technicalPlanResult;
+    private GenerationResult generationResult;
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
@@ -42,6 +44,7 @@ public class AutoQaContext {
         this.scenarioAnalysisResult = null;
         this.projectKnowledgeResult = null;
         this.technicalPlanResult = null;
+        this.generationResult = null;
         this.agentExecutions = new ArrayList<>();
         this.errors = new ArrayList<>();
     }
@@ -100,6 +103,10 @@ public class AutoQaContext {
 
     public TechnicalPlanResult getTechnicalPlanResult() {
         return technicalPlanResult;
+    }
+
+    public GenerationResult getGenerationResult() {
+        return generationResult;
     }
 
     public void startWorkflow() {
@@ -178,6 +185,16 @@ public class AutoQaContext {
         if (this.projectKnowledgeResult == null) throw new IllegalStateException("Project knowledge must be registered before technical plan");
         if (this.technicalPlanResult != null) throw new IllegalStateException("Technical plan already registered");
         this.technicalPlanResult = result;
+    }
+
+    public void registerGeneration(GenerationResult result) {
+        if (result == null) throw new NullPointerException("result must not be null");
+        if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before generation");
+        if (this.scenarioAnalysisResult == null) throw new IllegalStateException("Scenario analysis must be registered before generation");
+        if (this.projectKnowledgeResult == null) throw new IllegalStateException("Project knowledge must be registered before generation");
+        if (this.technicalPlanResult == null) throw new IllegalStateException("Technical plan must be registered before generation");
+        if (this.generationResult != null) throw new IllegalStateException("Generation already registered");
+        this.generationResult = result;
     }
 
     private String requireText(String value, String fieldName) {
