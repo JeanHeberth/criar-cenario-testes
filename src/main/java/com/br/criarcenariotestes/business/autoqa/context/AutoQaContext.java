@@ -6,6 +6,7 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscover
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
 import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
+import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 
 import java.time.LocalDateTime;
@@ -29,6 +30,7 @@ public class AutoQaContext {
     private ProjectKnowledgeResult projectKnowledgeResult;
     private TechnicalPlanResult technicalPlanResult;
     private GenerationResult generationResult;
+    private CodeReviewResult codeReviewResult;
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
@@ -45,6 +47,7 @@ public class AutoQaContext {
         this.projectKnowledgeResult = null;
         this.technicalPlanResult = null;
         this.generationResult = null;
+        this.codeReviewResult = null;
         this.agentExecutions = new ArrayList<>();
         this.errors = new ArrayList<>();
     }
@@ -107,6 +110,10 @@ public class AutoQaContext {
 
     public GenerationResult getGenerationResult() {
         return generationResult;
+    }
+
+    public CodeReviewResult getCodeReviewResult() {
+        return codeReviewResult;
     }
 
     public void startWorkflow() {
@@ -195,6 +202,17 @@ public class AutoQaContext {
         if (this.technicalPlanResult == null) throw new IllegalStateException("Technical plan must be registered before generation");
         if (this.generationResult != null) throw new IllegalStateException("Generation already registered");
         this.generationResult = result;
+    }
+
+    public void registerCodeReview(CodeReviewResult result) {
+        if (result == null) throw new NullPointerException("result must not be null");
+        if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before code review");
+        if (this.scenarioAnalysisResult == null) throw new IllegalStateException("Scenario analysis must be registered before code review");
+        if (this.projectKnowledgeResult == null) throw new IllegalStateException("Project knowledge must be registered before code review");
+        if (this.technicalPlanResult == null) throw new IllegalStateException("Technical plan must be registered before code review");
+        if (this.generationResult == null) throw new IllegalStateException("Generation must be registered before code review");
+        if (this.codeReviewResult != null) throw new IllegalStateException("Code review already registered");
+        this.codeReviewResult = result;
     }
 
     private String requireText(String value, String fieldName) {

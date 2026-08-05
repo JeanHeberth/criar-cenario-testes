@@ -12,6 +12,9 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.TestingFramewor
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationConfidence;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationStatus;
+import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
+import com.br.criarcenariotestes.business.autoqa.model.review.ReviewConfidence;
+import com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ComponentType;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.KnowledgeStatus;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.NamingConvention;
@@ -587,6 +590,115 @@ class AutoQaContextTest {
                 List.of(), List.of(), List.of(),
                 ".auto-qa/generated/" + executionId, executionId + "/manifest.json",
                 GenerationStatus.COMPLETED, GenerationConfidence.HIGH, true
+        );
+    }
+
+    // ---- CodeReview tests ----
+
+    @Test
+    @DisplayName("Deve registrar code review após generation")
+    void deveRegistrarCodeReview() {
+        AutoQaContext context = contextComGeneration();
+        CodeReviewResult review = sampleCodeReviewResult();
+
+        context.registerCodeReview(review);
+
+        assertThat(context.getCodeReviewResult()).isEqualTo(review);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar code review nulo")
+    void deveRejeitarCodeReviewNulo() {
+        AutoQaContext context = contextComGeneration();
+
+        assertThatThrownBy(() -> context.registerCodeReview(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir discovery antes do review")
+    void deveExigirDiscoveryAntesDoReview() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerCodeReview(sampleCodeReviewResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve exigir scenario antes do review")
+    void deveExigirScenarioAntesDoReview() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+
+        assertThatThrownBy(() -> context.registerCodeReview(sampleCodeReviewResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Scenario analysis");
+    }
+
+    @Test
+    @DisplayName("Deve exigir knowledge antes do review")
+    void deveExigirKnowledgeAntesDoReview() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+
+        assertThatThrownBy(() -> context.registerCodeReview(sampleCodeReviewResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("knowledge");
+    }
+
+    @Test
+    @DisplayName("Deve exigir planning antes do review")
+    void deveExigirPlanningAntesDoReview() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+
+        assertThatThrownBy(() -> context.registerCodeReview(sampleCodeReviewResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("plan");
+    }
+
+    @Test
+    @DisplayName("Deve exigir generation antes do review")
+    void deveExigirGenerationAntesDoReview() {
+        AutoQaContext context = contextComTechnicalPlan();
+
+        assertThatThrownBy(() -> context.registerCodeReview(sampleCodeReviewResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Generation");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segundo code review")
+    void deveRejeitarSegundoCodeReview() {
+        AutoQaContext context = contextComGeneration();
+        context.registerCodeReview(sampleCodeReviewResult());
+
+        assertThatThrownBy(() -> context.registerCodeReview(sampleCodeReviewResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para code review não registrado")
+    void deveRetornarNullParaCodeReviewNaoRegistrado() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getCodeReviewResult()).isNull();
+    }
+
+    private AutoQaContext contextComGeneration() {
+        AutoQaContext context = contextComTechnicalPlan();
+        context.registerGeneration(sampleGenerationResult());
+        return context;
+    }
+
+    private CodeReviewResult sampleCodeReviewResult() {
+        return new CodeReviewResult(
+                UUID.randomUUID(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                ReviewStatus.APPROVED, ReviewConfidence.HIGH, false, true
         );
     }
 }
