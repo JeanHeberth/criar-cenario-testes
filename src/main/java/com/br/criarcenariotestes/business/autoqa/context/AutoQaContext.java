@@ -3,6 +3,7 @@ package com.br.criarcenariotestes.business.autoqa.context;
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 
 import java.time.LocalDateTime;
@@ -23,6 +24,7 @@ public class AutoQaContext {
     private String currentAgent;
     private ProjectDiscoveryResult projectDiscoveryResult;
     private ScenarioAnalysisResult scenarioAnalysisResult;
+    private ProjectKnowledgeResult projectKnowledgeResult;
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
@@ -36,6 +38,7 @@ public class AutoQaContext {
         this.currentAgent = null;
         this.projectDiscoveryResult = null;
         this.scenarioAnalysisResult = null;
+        this.projectKnowledgeResult = null;
         this.agentExecutions = new ArrayList<>();
         this.errors = new ArrayList<>();
     }
@@ -86,6 +89,10 @@ public class AutoQaContext {
 
     public ScenarioAnalysisResult getScenarioAnalysisResult() {
         return scenarioAnalysisResult;
+    }
+
+    public ProjectKnowledgeResult getProjectKnowledgeResult() {
+        return projectKnowledgeResult;
     }
 
     public void startWorkflow() {
@@ -139,6 +146,22 @@ public class AutoQaContext {
             throw new IllegalStateException("Scenario analysis already registered");
         }
         this.scenarioAnalysisResult = result;
+    }
+
+    public void registerProjectKnowledge(ProjectKnowledgeResult result) {
+        if (result == null) {
+            throw new NullPointerException("result must not be null");
+        }
+        if (this.projectDiscoveryResult == null) {
+            throw new IllegalStateException("Project discovery must be registered before project knowledge");
+        }
+        if (this.scenarioAnalysisResult == null) {
+            throw new IllegalStateException("Scenario analysis must be registered before project knowledge");
+        }
+        if (this.projectKnowledgeResult != null) {
+            throw new IllegalStateException("Project knowledge already registered");
+        }
+        this.projectKnowledgeResult = result;
     }
 
     private String requireText(String value, String fieldName) {

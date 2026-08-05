@@ -9,6 +9,14 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.DiscoveryConfid
 import com.br.criarcenariotestes.business.autoqa.model.discovery.PackageManager;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.TestingFramework;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ComponentType;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.KnowledgeStatus;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.NamingConvention;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectComponent;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ReuseCandidate;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.ReuseConfidence;
+import com.br.criarcenariotestes.business.autoqa.model.knowledge.SourceLanguage;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisStatus;
@@ -271,6 +279,66 @@ class AutoQaContextTest {
                 .hasMessageContaining("analysis");
     }
 
+    @Test
+    @DisplayName("Deve registrar ProjectKnowledge")
+    void deveRegistrarProjectKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        ProjectKnowledgeResult knowledge = sampleKnowledge();
+
+        context.registerProjectKnowledge(knowledge);
+
+        assertThat(context.getProjectKnowledgeResult()).isEqualTo(knowledge);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ProjectKnowledge nulo")
+    void deveRejeitarProjectKnowledgeNulo() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir descoberta antes do knowledge")
+    void deveExigirDiscoveryAntesDoKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(sampleKnowledge()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve exigir scenario analysis antes do knowledge")
+    void deveExigirScenarioAnalysisAntesDoKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(sampleKnowledge()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Scenario analysis");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segundo ProjectKnowledge")
+    void deveRejeitarSegundoProjectKnowledge() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        ProjectKnowledgeResult knowledge = sampleKnowledge();
+
+        context.registerProjectKnowledge(knowledge);
+
+        assertThatThrownBy(() -> context.registerProjectKnowledge(knowledge))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("knowledge");
+    }
+
     private ProjectDiscoveryResult sampleDiscovery() {
         return new ProjectDiscoveryResult(
                 Path.of("/projeto"),
@@ -304,6 +372,43 @@ class AutoQaContextTest {
                 AutomationType.WEB_UI,
                 ScenarioAnalysisStatus.VALID,
                 List.of(),
+                true
+        );
+    }
+
+    private ProjectKnowledgeResult sampleKnowledge() {
+        ProjectComponent component = new ProjectComponent(
+                "src/test/java/com/example/LoginPage.java",
+                "LoginPage",
+                ComponentType.PAGE_OBJECT,
+                SourceLanguage.JAVA,
+                "com.example",
+                List.of("LoginPage"),
+                List.of("open"),
+                List.of("import org.openqa.selenium.By"),
+                List.of("@Page"),
+                List.of("PAGE_OBJECT"),
+                false,
+                true,
+                List.of()
+        );
+        return new ProjectKnowledgeResult(
+                Path.of("/projeto"),
+                List.of(component),
+                List.of(),
+                List.of(component),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(new ReuseCandidate("src/test/java/com/example/LoginPage.java", ComponentType.PAGE_OBJECT, "login", ReuseConfidence.HIGH, List.of("login"))),
+                new NamingConvention("*.java", "*Page.java", "PascalCase", "camelCase", "src/test/java", List.of("src/test/java/com/example/LoginPage.java"), ReuseConfidence.HIGH),
+                List.of("src/test/java"),
+                List.of("src/main/java"),
+                List.of("node_modules"),
+                List.of(),
+                KnowledgeStatus.COMPLETE,
                 true
         );
     }
