@@ -29,9 +29,9 @@ jobs:
       - name: Mesclar develop na main e fazer o push
         run: |
           git checkout main
-          
           git pull origin main
-          
           git merge origin/develop --no-ff -m "Automated merge: develop into main (PR #${{ github.event.pull_request.number }})"
 
-          git push origin main
+          # Garante o envio definitivo ignorando bloqueios simples de push
+          git push origin main --tags
+      

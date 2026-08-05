@@ -9,6 +9,9 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.DiscoveryConfid
 import com.br.criarcenariotestes.business.autoqa.model.discovery.PackageManager;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.TestingFramework;
+import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationConfidence;
+import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
+import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationStatus;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ComponentType;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.KnowledgeStatus;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.NamingConvention;
@@ -32,6 +35,7 @@ import java.time.LocalDateTime;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -479,5 +483,110 @@ class AutoQaContextTest {
     void deveRetornarNullParaTechnicalPlanNaoRegistrado() {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
         assertThat(context.getTechnicalPlanResult()).isNull();
+    }
+
+    // ---- Generation tests ----
+
+    @Test
+    @DisplayName("Deve registrar generation result após technical plan")
+    void deveRegistrarGenerationResult() {
+        AutoQaContext context = contextComTechnicalPlan();
+        GenerationResult generationResult = sampleGenerationResult();
+
+        context.registerGeneration(generationResult);
+
+        assertThat(context.getGenerationResult()).isEqualTo(generationResult);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar generation result nulo")
+    void deveRejeitarGenerationResultNulo() {
+        AutoQaContext context = contextComTechnicalPlan();
+
+        assertThatThrownBy(() -> context.registerGeneration(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir discovery antes da generation")
+    void deveExigirDiscoveryAntesDaGeneration() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerGeneration(sampleGenerationResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve exigir scenario antes da generation")
+    void deveExigirScenarioAntesDaGeneration() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+
+        assertThatThrownBy(() -> context.registerGeneration(sampleGenerationResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Scenario analysis");
+    }
+
+    @Test
+    @DisplayName("Deve exigir knowledge antes da generation")
+    void deveExigirKnowledgeAntesDaGeneration() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+
+        assertThatThrownBy(() -> context.registerGeneration(sampleGenerationResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("knowledge");
+    }
+
+    @Test
+    @DisplayName("Deve exigir planning antes da generation")
+    void deveExigirPlanningAntesDaGeneration() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+
+        assertThatThrownBy(() -> context.registerGeneration(sampleGenerationResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("plan");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segundo generation result")
+    void deveRejeitarSegundoGenerationResult() {
+        AutoQaContext context = contextComTechnicalPlan();
+        context.registerGeneration(sampleGenerationResult());
+
+        assertThatThrownBy(() -> context.registerGeneration(sampleGenerationResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para generation não registrada")
+    void deveRetornarNullParaGenerationNaoRegistrada() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getGenerationResult()).isNull();
+    }
+
+    private AutoQaContext contextComTechnicalPlan() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        context.registerProjectDiscovery(sampleDiscovery());
+        context.registerScenarioAnalysis(sampleAnalysis());
+        context.registerProjectKnowledge(sampleKnowledge());
+        context.registerTechnicalPlan(PlanningTestData.readyPlan());
+        return context;
+    }
+
+    private GenerationResult sampleGenerationResult() {
+        UUID executionId = UUID.randomUUID();
+        return new GenerationResult(
+                executionId, "PLAYWRIGHT", "TYPESCRIPT",
+                List.of(), List.of(), List.of(),
+                ".auto-qa/generated/" + executionId, executionId + "/manifest.json",
+                GenerationStatus.COMPLETED, GenerationConfidence.HIGH, true
+        );
     }
 }
