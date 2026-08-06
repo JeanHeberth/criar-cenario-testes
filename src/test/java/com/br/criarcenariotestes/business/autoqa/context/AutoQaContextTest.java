@@ -2,6 +2,10 @@ package com.br.criarcenariotestes.business.autoqa.context;
 
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
+import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyApproval;
+import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyOperation;
+import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyResult;
+import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyStatus;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationFramework;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationLanguage;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.BuildTool;
@@ -700,5 +704,149 @@ class AutoQaContextTest {
                 UUID.randomUUID(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
                 ReviewStatus.APPROVED, ReviewConfidence.HIGH, false, true
         );
+    }
+
+    // ---- ApplyApproval tests ----
+
+    @Test
+    @DisplayName("Deve registrar ApplyApproval após code review")
+    void deveRegistrarApplyApproval() {
+        AutoQaContext context = contextComCodeReview();
+        ApplyApproval approval = sampleApproval();
+
+        context.registerApplyApproval(approval);
+
+        assertThat(context.getApplyApproval()).isEqualTo(approval);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ApplyApproval nulo")
+    void deveRejeitarApplyApprovalNulo() {
+        AutoQaContext context = contextComCodeReview();
+
+        assertThatThrownBy(() -> context.registerApplyApproval(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir code review antes da aprovação")
+    void deveExigirCodeReviewAntesDaAprovacao() {
+        AutoQaContext context = contextComTechnicalPlan();
+
+        assertThatThrownBy(() -> context.registerApplyApproval(sampleApproval()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("review");
+    }
+
+    @Test
+    @DisplayName("Deve exigir approved=true para registrar aprovação")
+    void deveExigirApprovedTrueParaRegistrarAprovacao() {
+        AutoQaContext context = contextComCodeReview();
+        ApplyApproval naoAprovado = new ApplyApproval(false, "qa.lead", LocalDateTime.now(),
+                List.of(ApplyOperation.CREATE), true, true);
+
+        assertThatThrownBy(() -> context.registerApplyApproval(naoAprovado))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("approved");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segunda ApplyApproval")
+    void deveRejeitarSegundaApplyApproval() {
+        AutoQaContext context = contextComCodeReview();
+        context.registerApplyApproval(sampleApproval());
+
+        assertThatThrownBy(() -> context.registerApplyApproval(sampleApproval()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para ApplyApproval não registrada")
+    void deveRetornarNullParaApplyApprovalNaoRegistrada() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getApplyApproval()).isNull();
+    }
+
+    // ---- ApplyResult tests ----
+
+    @Test
+    @DisplayName("Deve registrar ApplyResult após ApplyApproval")
+    void deveRegistrarApplyResult() {
+        AutoQaContext context = contextComApplyApproval();
+        ApplyResult result = sampleApplyResult(context.getExecutionId());
+
+        context.registerApplyResult(result);
+
+        assertThat(context.getApplyResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ApplyResult nulo")
+    void deveRejeitarApplyResultNulo() {
+        AutoQaContext context = contextComApplyApproval();
+
+        assertThatThrownBy(() -> context.registerApplyResult(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir ApplyApproval antes do ApplyResult")
+    void deveExigirApplyApprovalAntesDoApplyResult() {
+        AutoQaContext context = contextComCodeReview();
+
+        assertThatThrownBy(() -> context.registerApplyResult(sampleApplyResult(context.getExecutionId())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("approval");
+    }
+
+    @Test
+    @DisplayName("Deve exigir discovery antes do ApplyResult")
+    void deveExigirDiscoveryAntesDoApplyResult() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerApplyResult(sampleApplyResult(context.getExecutionId())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segundo ApplyResult")
+    void deveRejeitarSegundoApplyResult() {
+        AutoQaContext context = contextComApplyApproval();
+        context.registerApplyResult(sampleApplyResult(context.getExecutionId()));
+
+        assertThatThrownBy(() -> context.registerApplyResult(sampleApplyResult(context.getExecutionId())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para ApplyResult não registrado")
+    void deveRetornarNullParaApplyResultNaoRegistrado() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getApplyResult()).isNull();
+    }
+
+    private AutoQaContext contextComCodeReview() {
+        AutoQaContext context = contextComGeneration();
+        context.registerCodeReview(sampleCodeReviewResult());
+        return context;
+    }
+
+    private AutoQaContext contextComApplyApproval() {
+        AutoQaContext context = contextComCodeReview();
+        context.registerApplyApproval(sampleApproval());
+        return context;
+    }
+
+    private ApplyApproval sampleApproval() {
+        return new ApplyApproval(true, "qa.lead", LocalDateTime.now(),
+                List.of(ApplyOperation.CREATE, ApplyOperation.UPDATE), true, true);
+    }
+
+    private ApplyResult sampleApplyResult(UUID executionId) {
+        return new ApplyResult(executionId, List.of(), List.of(), List.of(), List.of(),
+                "projeto", ".auto-qa/backups/" + executionId, ApplyStatus.COMPLETED, false, true);
     }
 }
