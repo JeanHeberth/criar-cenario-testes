@@ -12,11 +12,13 @@ import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanRes
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
 import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyResult;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+@Service
 public class FailureAnalysisService {
 
     private final ExecutionEvidenceExtractor extractor = new ExecutionEvidenceExtractor();
