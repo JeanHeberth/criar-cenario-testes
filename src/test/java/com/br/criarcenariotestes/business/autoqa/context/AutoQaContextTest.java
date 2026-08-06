@@ -1015,4 +1015,58 @@ class AutoQaContextTest {
         return new ExecutionResult(UUID.randomUUID(), command, ExecutionStatus.PASSED, 0,
                 null, null, null, "", "", false, false, List.of(), List.of(), true);
     }
+
+    // ---- FailureAnalysis registration tests ----
+
+    @Test
+    @DisplayName("Deve registrar FailureAnalysisResult quando pré-condições satisfeitas")
+    void deveRegistrarFailureAnalysis() {
+        AutoQaContext context = contextComExecutionApproval();
+        ExecutionResult exec = new ExecutionResult(UUID.randomUUID(), new CommandSpecification(ExecutionCommandId.PYTEST, "pytest", List.of(), "projeto", Duration.ofMinutes(1), Map.of(), ExecutionCommandType.TEST), com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionStatus.FAILED, 1,
+                null, null, null, "", "", false, false, List.of(), List.of(), true);
+        context.registerExecutionResult(exec);
+
+        com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult result = new com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult(
+                context.getExecutionId(), List.of(), List.of(), List.of(), List.of(), com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisStatus.INCONCLUSIVE, com.br.criarcenariotestes.business.autoqa.model.failure.FailureConfidence.UNKNOWN, true, false, false, true
+        );
+
+        context.registerFailureAnalysis(result);
+
+        assertThat(context.getFailureAnalysisResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar FailureAnalysis nulo")
+    void deveRejeitarFailureAnalysisNulo() {
+        AutoQaContext context = contextComExecutionApproval();
+        assertThatThrownBy(() -> context.registerFailureAnalysis(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir ExecutionResult antes da analise")
+    void deveExigirExecutionResultAntesDaAnalise() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult result = new com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult(
+                context.getExecutionId(), List.of(), List.of(), List.of(), List.of(), com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisStatus.INCONCLUSIVE, com.br.criarcenariotestes.business.autoqa.model.failure.FailureConfidence.UNKNOWN, true, false, false, true
+        );
+        assertThatThrownBy(() -> context.registerFailureAnalysis(result)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Execution result");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segunda FailureAnalysis")
+    void deveRejeitarSegundaFailureAnalysis() {
+        AutoQaContext context = contextComExecutionApproval();
+        ExecutionResult exec = new ExecutionResult(UUID.randomUUID(), new CommandSpecification(ExecutionCommandId.PYTEST, "pytest", List.of(), "projeto", Duration.ofMinutes(1), Map.of(), ExecutionCommandType.TEST), com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionStatus.FAILED, 1,
+                null, null, null, "", "", false, false, List.of(), List.of(), true);
+        context.registerExecutionResult(exec);
+
+        com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult result = new com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult(
+                context.getExecutionId(), List.of(), List.of(), List.of(), List.of(), com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisStatus.INCONCLUSIVE, com.br.criarcenariotestes.business.autoqa.model.failure.FailureConfidence.UNKNOWN, true, false, false, true
+        );
+
+        context.registerFailureAnalysis(result);
+
+        assertThatThrownBy(() -> context.registerFailureAnalysis(result)).isInstanceOf(IllegalStateException.class);
+    }
 }

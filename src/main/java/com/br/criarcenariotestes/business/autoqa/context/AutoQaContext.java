@@ -297,4 +297,26 @@ public class AutoQaContext {
         }
         return trimmed;
     }
+
+    // Failure analysis result
+    private com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult failureAnalysisResult;
+
+    public com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult getFailureAnalysisResult() {
+        return failureAnalysisResult;
+    }
+
+    public void registerFailureAnalysis(com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult result) {
+        if (result == null) throw new NullPointerException("result must not be null");
+        if (this.executionResult == null) throw new IllegalStateException("Execution result must be registered before failure analysis");
+        if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before failure analysis");
+        if (this.scenarioAnalysisResult == null) throw new IllegalStateException("Scenario analysis must be registered before failure analysis");
+        if (this.projectKnowledgeResult == null) throw new IllegalStateException("Project knowledge must be registered before failure analysis");
+        if (this.technicalPlanResult == null) throw new IllegalStateException("Technical plan must be registered before failure analysis");
+        if (this.generationResult == null) throw new IllegalStateException("Generation must be registered before failure analysis");
+        if (this.codeReviewResult == null) throw new IllegalStateException("Code review must be registered before failure analysis");
+        if (this.applyResult == null) throw new IllegalStateException("Apply result must be registered before failure analysis");
+        if (this.failureAnalysisResult != null) throw new IllegalStateException("Failure analysis already registered");
+        this.failureAnalysisResult = result;
+    }
 }
+
