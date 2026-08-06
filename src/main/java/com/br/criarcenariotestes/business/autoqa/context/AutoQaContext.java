@@ -8,7 +8,9 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscover
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionApproval;
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
+import com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
+import com.br.criarcenariotestes.business.autoqa.model.learning.LearningResult;
 import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
@@ -299,13 +301,13 @@ public class AutoQaContext {
     }
 
     // Failure analysis result
-    private com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult failureAnalysisResult;
+    private FailureAnalysisResult failureAnalysisResult;
 
-    public com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult getFailureAnalysisResult() {
+    public FailureAnalysisResult getFailureAnalysisResult() {
         return failureAnalysisResult;
     }
 
-    public void registerFailureAnalysis(com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult result) {
+    public void registerFailureAnalysis(FailureAnalysisResult result) {
         if (result == null) throw new NullPointerException("result must not be null");
         if (this.executionResult == null) throw new IllegalStateException("Execution result must be registered before failure analysis");
         if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before failure analysis");
@@ -317,6 +319,28 @@ public class AutoQaContext {
         if (this.applyResult == null) throw new IllegalStateException("Apply result must be registered before failure analysis");
         if (this.failureAnalysisResult != null) throw new IllegalStateException("Failure analysis already registered");
         this.failureAnalysisResult = result;
+    }
+
+    // Learning result
+    private LearningResult learningResult;
+
+    public LearningResult getLearningResult() {
+        return learningResult;
+    }
+
+    public void registerLearning(LearningResult result) {
+        if (result == null) throw new NullPointerException("result must not be null");
+        if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before learning");
+        if (this.scenarioAnalysisResult == null) throw new IllegalStateException("Scenario analysis must be registered before learning");
+        if (this.projectKnowledgeResult == null) throw new IllegalStateException("Project knowledge must be registered before learning");
+        if (this.technicalPlanResult == null) throw new IllegalStateException("Technical plan must be registered before learning");
+        if (this.generationResult == null) throw new IllegalStateException("Generation must be registered before learning");
+        if (this.codeReviewResult == null) throw new IllegalStateException("Code review must be registered before learning");
+        if (this.applyResult == null) throw new IllegalStateException("Apply result must be registered before learning");
+        if (this.executionResult == null) throw new IllegalStateException("Execution result must be registered before learning");
+        if (this.failureAnalysisResult == null) throw new IllegalStateException("Failure analysis must be registered before learning");
+        if (this.learningResult != null) throw new IllegalStateException("Learning already registered");
+        this.learningResult = result;
     }
 }
 

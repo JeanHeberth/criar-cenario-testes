@@ -1069,4 +1069,70 @@ class AutoQaContextTest {
 
         assertThatThrownBy(() -> context.registerFailureAnalysis(result)).isInstanceOf(IllegalStateException.class);
     }
+
+    // ---- Learning registration tests ----
+
+    private AutoQaContext contextComFailureAnalysis() {
+        AutoQaContext context = contextComExecutionApproval();
+        ExecutionResult exec = new ExecutionResult(UUID.randomUUID(),
+                new CommandSpecification(ExecutionCommandId.PYTEST, "pytest", List.of(), "projeto", Duration.ofMinutes(1), Map.of(), ExecutionCommandType.TEST),
+                com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionStatus.PASSED, 0,
+                null, null, null, "", "", false, false, List.of(), List.of(), true);
+        context.registerExecutionResult(exec);
+        com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult failureAnalysis =
+                new com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult(
+                        context.getExecutionId(), List.of(), List.of(), List.of(), List.of(),
+                        com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisStatus.NO_FAILURE,
+                        com.br.criarcenariotestes.business.autoqa.model.failure.FailureConfidence.HIGH, false, false, false, true);
+        context.registerFailureAnalysis(failureAnalysis);
+        return context;
+    }
+
+    private com.br.criarcenariotestes.business.autoqa.model.learning.LearningResult sampleLearningResult(java.util.UUID executionId) {
+        return new com.br.criarcenariotestes.business.autoqa.model.learning.LearningResult(
+                executionId, List.of(), List.of(), List.of(),
+                com.br.criarcenariotestes.business.autoqa.model.learning.LearningStatus.SKIPPED,
+                com.br.criarcenariotestes.business.autoqa.model.learning.LearningConfidence.UNKNOWN, 0, 0, false, true);
+    }
+
+    @Test
+    @DisplayName("Deve registrar LearningResult quando pré-condições satisfeitas")
+    void deveRegistrarLearning() {
+        AutoQaContext context = contextComFailureAnalysis();
+        var result = sampleLearningResult(context.getExecutionId());
+
+        context.registerLearning(result);
+
+        assertThat(context.getLearningResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar Learning nulo")
+    void deveRejeitarLearningNulo() {
+        AutoQaContext context = contextComFailureAnalysis();
+        assertThatThrownBy(() -> context.registerLearning(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir FailureAnalysis antes do Learning")
+    void deveExigirFailureAnalysisAntesDoLearning() {
+        AutoQaContext context = contextComExecutionApproval();
+        ExecutionResult exec = new ExecutionResult(UUID.randomUUID(),
+                new CommandSpecification(ExecutionCommandId.PYTEST, "pytest", List.of(), "projeto", Duration.ofMinutes(1), Map.of(), ExecutionCommandType.TEST),
+                com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionStatus.PASSED, 0,
+                null, null, null, "", "", false, false, List.of(), List.of(), true);
+        context.registerExecutionResult(exec);
+        var result = sampleLearningResult(context.getExecutionId());
+        assertThatThrownBy(() -> context.registerLearning(result)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failure analysis");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segundo Learning")
+    void deveRejeitarSegundoLearning() {
+        AutoQaContext context = contextComFailureAnalysis();
+        var result = sampleLearningResult(context.getExecutionId());
+        context.registerLearning(result);
+        assertThatThrownBy(() -> context.registerLearning(result)).isInstanceOf(IllegalStateException.class);
+    }
 }
