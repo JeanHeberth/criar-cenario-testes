@@ -17,6 +17,7 @@ import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanRes
 import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
 import com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -32,6 +33,7 @@ import java.util.UUID;
  * nunca para reformular texto ou quando já existe determinístico HIGH/MEDIUM
  * coerente.
  */
+@Service
 public class LearningService {
 
     private static final Set<ExecutionStatus> OPERATIONAL_EXECUTION_STATUSES =
