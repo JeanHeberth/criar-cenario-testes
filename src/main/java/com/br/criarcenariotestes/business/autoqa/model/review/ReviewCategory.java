@@ -1,0 +1,23 @@
+package com.br.criarcenariotestes.business.autoqa.model.review;
+
+public enum ReviewCategory {
+    PLAN_ADHERENCE,
+    FRAMEWORK_COMPATIBILITY,
+    LANGUAGE_COMPATIBILITY,
+    CODE_QUALITY,
+    SECURITY,
+    REUSE,
+    DUPLICATION,
+    DEPENDENCY,
+    IMPORT,
+    NAMING,
+    STRUCTURE,
+    MAINTAINABILITY,
+    TEST_DESIGN,
+    ASSERTION,
+    WAIT_STRATEGY,
+    ERROR_HANDLING,
+    DATA_MANAGEMENT,
+    DOCUMENTATION,
+    UNKNOWN
+}
