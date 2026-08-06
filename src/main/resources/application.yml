@@ -57,5 +57,11 @@ auto-qa:
   max-execution-minutes: 10
   generated-directory: .auto-qa/generated
   backup-directory: .auto-qa/backups
-  allow-command-execution: true
-  allow-file-application: true
+
+
+
+  allow-command-execution: false
+  allow-file-application: false
+  sensitive-actions-enabled: false
+  retention-days: 30
+  max-concurrent-executions: 5
