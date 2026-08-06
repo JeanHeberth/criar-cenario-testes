@@ -2,6 +2,8 @@ package com.br.criarcenariotestes.business.autoqa.context;
 
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.AutoQaStatus;
+import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyApproval;
+import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyResult;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
@@ -31,6 +33,8 @@ public class AutoQaContext {
     private TechnicalPlanResult technicalPlanResult;
     private GenerationResult generationResult;
     private CodeReviewResult codeReviewResult;
+    private ApplyApproval applyApproval;
+    private ApplyResult applyResult;
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
@@ -48,6 +52,8 @@ public class AutoQaContext {
         this.technicalPlanResult = null;
         this.generationResult = null;
         this.codeReviewResult = null;
+        this.applyApproval = null;
+        this.applyResult = null;
         this.agentExecutions = new ArrayList<>();
         this.errors = new ArrayList<>();
     }
@@ -114,6 +120,14 @@ public class AutoQaContext {
 
     public CodeReviewResult getCodeReviewResult() {
         return codeReviewResult;
+    }
+
+    public ApplyApproval getApplyApproval() {
+        return applyApproval;
+    }
+
+    public ApplyResult getApplyResult() {
+        return applyResult;
     }
 
     public void startWorkflow() {
@@ -213,6 +227,27 @@ public class AutoQaContext {
         if (this.generationResult == null) throw new IllegalStateException("Generation must be registered before code review");
         if (this.codeReviewResult != null) throw new IllegalStateException("Code review already registered");
         this.codeReviewResult = result;
+    }
+
+    public void registerApplyApproval(ApplyApproval approval) {
+        if (approval == null) throw new NullPointerException("approval must not be null");
+        if (this.codeReviewResult == null) throw new IllegalStateException("Code review must be registered before apply approval");
+        if (!approval.approved()) throw new IllegalStateException("ApplyApproval.approved must be true to register");
+        if (this.applyApproval != null) throw new IllegalStateException("Apply approval already registered");
+        this.applyApproval = approval;
+    }
+
+    public void registerApplyResult(ApplyResult result) {
+        if (result == null) throw new NullPointerException("result must not be null");
+        if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before apply result");
+        if (this.scenarioAnalysisResult == null) throw new IllegalStateException("Scenario analysis must be registered before apply result");
+        if (this.projectKnowledgeResult == null) throw new IllegalStateException("Project knowledge must be registered before apply result");
+        if (this.technicalPlanResult == null) throw new IllegalStateException("Technical plan must be registered before apply result");
+        if (this.generationResult == null) throw new IllegalStateException("Generation must be registered before apply result");
+        if (this.codeReviewResult == null) throw new IllegalStateException("Code review must be registered before apply result");
+        if (this.applyApproval == null) throw new IllegalStateException("Apply approval must be registered before apply result");
+        if (this.applyResult != null) throw new IllegalStateException("Apply result already registered");
+        this.applyResult = result;
     }
 
     private String requireText(String value, String fieldName) {
