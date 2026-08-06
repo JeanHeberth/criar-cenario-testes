@@ -1,0 +1,22 @@
+package com.br.criarcenariotestes.business.autoqa.model.learning;
+
+public enum LearningType {
+    REUSABLE_COMPONENT,
+    NAMING_CONVENTION,
+    PROJECT_STRUCTURE,
+    TEST_PATTERN,
+    ASSERTION_PATTERN,
+    WAIT_STRATEGY,
+    DATA_STRATEGY,
+    ERROR_HANDLING,
+    COMMAND_PATTERN,
+    FRAMEWORK_RULE,
+    GENERATION_STRATEGY,
+    REVIEW_RULE,
+    FAILURE_PATTERN,
+    ANTI_PATTERN,
+    RISK_PATTERN,
+    RETRY_STRATEGY,
+    REGENERATION_STRATEGY,
+    UNKNOWN
+}

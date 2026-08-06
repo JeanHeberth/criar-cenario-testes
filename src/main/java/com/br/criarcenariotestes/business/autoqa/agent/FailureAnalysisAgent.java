@@ -1,22 +1,28 @@
 package com.br.criarcenariotestes.business.autoqa.agent;
 
+import com.br.criarcenariotestes.business.autoqa.context.AutoQaContext;
 import com.br.criarcenariotestes.business.autoqa.failure.FailureAnalysisService;
 import com.br.criarcenariotestes.business.autoqa.failure.exception.FailureAnalysisException;
 import com.br.criarcenariotestes.business.autoqa.model.AgentExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionResult;
 import com.br.criarcenariotestes.business.autoqa.model.failure.FailureAnalysisResult;
-import com.br.criarcenariotestes.business.autoqa.context.AutoQaContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 
+@Component
 @Order(80)
-public class FailureAnalysisAgent implements com.br.criarcenariotestes.business.autoqa.agent.AutoQaAgent {
+public class FailureAnalysisAgent implements AutoQaAgent {
+
+    private static final Logger log = LoggerFactory.getLogger(FailureAnalysisAgent.class);
 
     private final FailureAnalysisService service;
 
     public FailureAnalysisAgent(FailureAnalysisService service) {
-        this.service = service;
+        this.service = Objects.requireNonNull(service, "service must not be null");
     }
 
     @Override
@@ -27,6 +33,7 @@ public class FailureAnalysisAgent implements com.br.criarcenariotestes.business.
     @Override
     public AgentExecutionResult execute(AutoQaContext context) {
         Objects.requireNonNull(context, "context must not be null");
+        log.info("Failure analysis agent started. executionId={}", context.getExecutionId());
         ExecutionResult execution = context.getExecutionResult();
         if (execution == null) throw new IllegalStateException("ExecutionResult must be present in context");
 
@@ -43,8 +50,11 @@ public class FailureAnalysisAgent implements com.br.criarcenariotestes.business.
                     execution
             );
             context.registerFailureAnalysis(result);
+            log.info("Failure analysis agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success("Failure analysis: " + result.status());
         } catch (FailureAnalysisException ex) {
+            log.warn("Failure analysis agent failed. executionId={}, failureType={}",
+                    context.getExecutionId(), ex.getClass().getSimpleName());
             context.addError(ex.getMessage());
             return AgentExecutionResult.failure(ex.getMessage());
         }
