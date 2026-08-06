@@ -13,6 +13,12 @@ import com.br.criarcenariotestes.business.autoqa.model.discovery.DiscoveryConfid
 import com.br.criarcenariotestes.business.autoqa.model.discovery.PackageManager;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.TestingFramework;
+import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionApproval;
+import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionCommandId;
+import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionCommandType;
+import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionResult;
+import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionStatus;
+import com.br.criarcenariotestes.business.autoqa.model.execution.CommandSpecification;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationConfidence;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationStatus;
@@ -38,9 +44,11 @@ import com.br.criarcenariotestes.business.autoqa.planning.PlanningTestData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -848,5 +856,163 @@ class AutoQaContextTest {
     private ApplyResult sampleApplyResult(UUID executionId) {
         return new ApplyResult(executionId, List.of(), List.of(), List.of(), List.of(),
                 "projeto", ".auto-qa/backups/" + executionId, ApplyStatus.COMPLETED, false, true);
+    }
+
+    // ---- ExecutionApproval tests ----
+
+    @Test
+    @DisplayName("Deve registrar ExecutionApproval após ApplyResult")
+    void deveRegistrarExecutionApproval() {
+        AutoQaContext context = contextComApplyResult();
+        ExecutionApproval approval = sampleExecutionApproval();
+
+        context.registerExecutionApproval(approval);
+
+        assertThat(context.getExecutionApproval()).isEqualTo(approval);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ExecutionApproval nula")
+    void deveRejeitarExecutionApprovalNula() {
+        AutoQaContext context = contextComApplyResult();
+
+        assertThatThrownBy(() -> context.registerExecutionApproval(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir ApplyResult antes da ExecutionApproval")
+    void deveExigirApplyResultAntesDaExecutionApproval() {
+        AutoQaContext context = contextComApplyApproval();
+
+        assertThatThrownBy(() -> context.registerExecutionApproval(sampleExecutionApproval()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Apply result");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ExecutionApproval com approved=false")
+    void deveRejeitarExecutionApprovalNaoAprovada() {
+        AutoQaContext context = contextComApplyResult();
+        ExecutionApproval naoAprovada = new ExecutionApproval(false, "qa.lead", LocalDateTime.now(),
+                Set.of(ExecutionCommandId.PYTEST), true, false, false);
+
+        assertThatThrownBy(() -> context.registerExecutionApproval(naoAprovada))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("approved");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ExecutionApproval com allowTestExecution=false")
+    void deveRejeitarExecutionApprovalSemAllowTestExecution() {
+        AutoQaContext context = contextComApplyResult();
+        ExecutionApproval semExecucao = new ExecutionApproval(true, "qa.lead", LocalDateTime.now(),
+                Set.of(ExecutionCommandId.PYTEST), false, false, false);
+
+        assertThatThrownBy(() -> context.registerExecutionApproval(semExecucao))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("allowTestExecution");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segunda ExecutionApproval")
+    void deveRejeitarSegundaExecutionApproval() {
+        AutoQaContext context = contextComApplyResult();
+        context.registerExecutionApproval(sampleExecutionApproval());
+
+        assertThatThrownBy(() -> context.registerExecutionApproval(sampleExecutionApproval()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para ExecutionApproval não registrada")
+    void deveRetornarNullParaExecutionApprovalNaoRegistrada() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getExecutionApproval()).isNull();
+    }
+
+    // ---- ExecutionResult tests ----
+
+    @Test
+    @DisplayName("Deve registrar ExecutionResult após ExecutionApproval")
+    void deveRegistrarExecutionResult() {
+        AutoQaContext context = contextComExecutionApproval();
+        ExecutionResult result = sampleExecutionResult();
+
+        context.registerExecutionResult(result);
+
+        assertThat(context.getExecutionResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar ExecutionResult nulo")
+    void deveRejeitarExecutionResultNulo() {
+        AutoQaContext context = contextComExecutionApproval();
+
+        assertThatThrownBy(() -> context.registerExecutionResult(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("Deve exigir ExecutionApproval antes do ExecutionResult")
+    void deveExigirApprovalAntesDoExecutionResult() {
+        AutoQaContext context = contextComApplyResult();
+
+        assertThatThrownBy(() -> context.registerExecutionResult(sampleExecutionResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("approval");
+    }
+
+    @Test
+    @DisplayName("Deve exigir todas as fases anteriores antes do ExecutionResult")
+    void deveExigirTodasAsFasesAnterioresAntesDoExecutionResult() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+
+        assertThatThrownBy(() -> context.registerExecutionResult(sampleExecutionResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("discovery");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar segundo ExecutionResult")
+    void deveRejeitarSegundoExecutionResult() {
+        AutoQaContext context = contextComExecutionApproval();
+        context.registerExecutionResult(sampleExecutionResult());
+
+        assertThatThrownBy(() -> context.registerExecutionResult(sampleExecutionResult()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("Deve retornar null para ExecutionResult não registrado")
+    void deveRetornarNullParaExecutionResultNaoRegistrado() {
+        AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
+        assertThat(context.getExecutionResult()).isNull();
+    }
+
+    private AutoQaContext contextComApplyResult() {
+        AutoQaContext context = contextComApplyApproval();
+        context.registerApplyResult(sampleApplyResult(context.getExecutionId()));
+        return context;
+    }
+
+    private AutoQaContext contextComExecutionApproval() {
+        AutoQaContext context = contextComApplyResult();
+        context.registerExecutionApproval(sampleExecutionApproval());
+        return context;
+    }
+
+    private ExecutionApproval sampleExecutionApproval() {
+        return new ExecutionApproval(true, "qa.lead", LocalDateTime.now(),
+                Set.of(ExecutionCommandId.PYTEST), true, false, false);
+    }
+
+    private ExecutionResult sampleExecutionResult() {
+        CommandSpecification command = new CommandSpecification(ExecutionCommandId.PYTEST, "pytest", List.of(),
+                "projeto", Duration.ofMinutes(1), Map.of(), ExecutionCommandType.TEST);
+        return new ExecutionResult(UUID.randomUUID(), command, ExecutionStatus.PASSED, 0,
+                null, null, null, "", "", false, false, List.of(), List.of(), true);
     }
 }
