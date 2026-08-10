@@ -10,9 +10,11 @@ import com.br.criarcenariotestes.business.autoqa.executionapi.model.AutoQaWorkfl
 import com.br.criarcenariotestes.business.autoqa.executionapi.persistence.*;
 import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyApproval;
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionApproval;
+import com.br.criarcenariotestes.business.autoqa.security.ProjectPathSecurityValidator;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
@@ -41,6 +43,7 @@ public class AutoQaExecutionOrchestrator {
     private final AutoQaTransitionValidator transitionValidator;
     private final AutoQaAvailableActionResolver actionResolver;
     private final AutoQaProperties properties;
+    private final ProjectPathSecurityValidator projectPathSecurityValidator;
 
     public AutoQaExecutionOrchestrator(AutoQaExecutionRepository executionRepository,
                                         AutoQaExecutionSnapshotRepository snapshotRepository,
@@ -48,7 +51,8 @@ public class AutoQaExecutionOrchestrator {
                                         AutoQaStageExecutor stageExecutor,
                                         AutoQaTransitionValidator transitionValidator,
                                         AutoQaAvailableActionResolver actionResolver,
-                                        AutoQaProperties properties) {
+                                        AutoQaProperties properties,
+                                        ProjectPathSecurityValidator projectPathSecurityValidator) {
         this.executionRepository = Objects.requireNonNull(executionRepository);
         this.snapshotRepository = Objects.requireNonNull(snapshotRepository);
         this.snapshotMapper = Objects.requireNonNull(snapshotMapper);
@@ -56,6 +60,7 @@ public class AutoQaExecutionOrchestrator {
         this.transitionValidator = Objects.requireNonNull(transitionValidator);
         this.actionResolver = Objects.requireNonNull(actionResolver);
         this.properties = Objects.requireNonNull(properties);
+        this.projectPathSecurityValidator = Objects.requireNonNull(projectPathSecurityValidator);
     }
 
     public AutoQaExecutionDocument create(String scenario, String projectPath) {
@@ -64,6 +69,10 @@ public class AutoQaExecutionOrchestrator {
         if (!properties.isEnabled()) {
             throw new AutoQaExecutionDisabledException("Auto QA está desabilitado (auto-qa.enabled=false)");
         }
+        // Rejeita cedo (antes de persistir) um projectPath fora de auto-qa.allowed-roots,
+        // delegando à mesma política central usada de forma autoritativa em
+        // ProjectDiscoveryService — evita criar uma execução fadada a falhar só no START.
+        projectPathSecurityValidator.validate(Path.of(projectPath));
 
         UUID executionId = UUID.randomUUID();
         Instant now = Instant.now();

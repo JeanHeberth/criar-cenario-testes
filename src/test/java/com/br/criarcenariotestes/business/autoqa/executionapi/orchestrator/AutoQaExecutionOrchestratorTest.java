@@ -12,11 +12,14 @@ import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyApproval;
 import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyOperation;
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionApproval;
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionCommandId;
+import com.br.criarcenariotestes.business.autoqa.security.ProjectPathSecurityValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.dao.OptimisticLockingFailureException;
 
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,6 +43,9 @@ class AutoQaExecutionOrchestratorTest {
     private AutoQaProperties properties;
     private AutoQaExecutionOrchestrator orchestrator;
 
+    @TempDir
+    Path tempDir;
+
     @BeforeEach
     void setUp() {
         executionRepository = mock(AutoQaExecutionRepository.class);
@@ -52,9 +58,13 @@ class AutoQaExecutionOrchestratorTest {
         properties.setAllowFileApplication(true);
         properties.setAllowCommandExecution(true);
         properties.setSensitiveActionsEnabled(true);
+        // Fase 13.1A: create() agora exige que projectPath esteja dentro de uma
+        // auto-qa.allowed-roots — tempDir é a única raiz autorizada nestes testes.
+        properties.setAllowedRoots(List.of(tempDir.toString()));
 
         orchestrator = new AutoQaExecutionOrchestrator(executionRepository, snapshotRepository, snapshotMapper,
-                stageExecutor, transitionValidator, actionResolver, properties);
+                stageExecutor, transitionValidator, actionResolver, properties,
+                new ProjectPathSecurityValidator(properties));
 
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(snapshotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -65,7 +75,7 @@ class AutoQaExecutionOrchestratorTest {
     @Test
     @DisplayName("create deve persistir documento e snapshot novos")
     void createDevePersistirDocumentoESnapshot() {
-        AutoQaExecutionDocument document = orchestrator.create("cenário", "/projeto");
+        AutoQaExecutionDocument document = orchestrator.create("cenário", tempDir.toString());
 
         assertThat(document.getWorkflowStatus()).isEqualTo(AutoQaWorkflowStatus.CREATED);
         verify(executionRepository).save(any());
@@ -76,8 +86,32 @@ class AutoQaExecutionOrchestratorTest {
     @DisplayName("create deve lançar AutoQaExecutionDisabledException quando auto-qa.enabled=false")
     void createDeveLancarQuandoDesabilitado() {
         properties.setEnabled(false);
-        assertThatThrownBy(() -> orchestrator.create("cenário", "/projeto"))
+        assertThatThrownBy(() -> orchestrator.create("cenário", tempDir.toString()))
                 .isInstanceOf(AutoQaExecutionDisabledException.class);
+        verifyNoInteractions(executionRepository);
+    }
+
+    @Test
+    @DisplayName("create deve rejeitar projectPath fora de auto-qa.allowed-roots, sem persistir nada (Fase 13.1A)")
+    void createDeveRejeitarProjectPathForaDeAllowedRoots() throws Exception {
+        Path outsideRoot = java.nio.file.Files.createTempDirectory("fora-da-allowlist");
+        try {
+            assertThatThrownBy(() -> orchestrator.create("cenário", outsideRoot.toString()))
+                    .isInstanceOf(AutoQaProjectPathNotAllowedException.class);
+            verifyNoInteractions(executionRepository);
+            verifyNoInteractions(snapshotRepository);
+        } finally {
+            java.nio.file.Files.deleteIfExists(outsideRoot);
+        }
+    }
+
+    @Test
+    @DisplayName("create deve rejeitar qualquer projectPath quando allowed-roots estiver vazia (fail-closed)")
+    void createDeveRejeitarQuandoAllowedRootsVazia() {
+        properties.setAllowedRoots(List.of());
+
+        assertThatThrownBy(() -> orchestrator.create("cenário", tempDir.toString()))
+                .isInstanceOf(AutoQaProjectPathNotAllowedException.class);
         verifyNoInteractions(executionRepository);
     }
 

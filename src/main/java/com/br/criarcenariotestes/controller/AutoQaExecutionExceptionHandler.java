@@ -31,12 +31,23 @@ public class AutoQaExecutionExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "Request inválido", request);
     }
 
+    /**
+     * Validação de forma do projectPath (nulo/vazio/inexistente/não-diretório/
+     * não-legível), lançada por ProjectPathSecurityValidator antes mesmo de
+     * chegar à checagem de allowedRoots. Mensagem nunca inclui o path recebido.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex, WebRequest request) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(AutoQaExecutionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(AutoQaExecutionNotFoundException ex, WebRequest request) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request);
     }
 
-    @ExceptionHandler({AutoQaExecutionDisabledException.class, AutoQaSensitiveActionDisabledException.class})
+    @ExceptionHandler({AutoQaExecutionDisabledException.class, AutoQaSensitiveActionDisabledException.class,
+            AutoQaProjectPathNotAllowedException.class})
     public ResponseEntity<ErrorResponse> handleForbidden(AutoQaExecutionApiException ex, WebRequest request) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), request);
     }

@@ -8,10 +8,9 @@ import com.br.criarcenariotestes.business.autoqa.discovery.parser.ProjectFilesPa
 import com.br.criarcenariotestes.business.autoqa.discovery.scanner.ProjectScanResult;
 import com.br.criarcenariotestes.business.autoqa.discovery.scanner.ProjectScanner;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
+import com.br.criarcenariotestes.business.autoqa.security.ProjectPathSecurityValidator;
 import org.springframework.stereotype.Service;
 
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
@@ -23,19 +22,27 @@ public class ProjectDiscoveryService {
     private final ProjectFilesParser projectFilesParser;
     private final List<FrameworkDetector> frameworkDetectors;
     private final ProjectDiscoveryResultBuilder resultBuilder;
+    private final ProjectPathSecurityValidator projectPathSecurityValidator;
 
     public ProjectDiscoveryService(ProjectScanner projectScanner,
                                    ProjectFilesParser projectFilesParser,
                                    List<FrameworkDetector> frameworkDetectors,
-                                   ProjectDiscoveryResultBuilder resultBuilder) {
+                                   ProjectDiscoveryResultBuilder resultBuilder,
+                                   ProjectPathSecurityValidator projectPathSecurityValidator) {
         this.projectScanner = Objects.requireNonNull(projectScanner, "projectScanner must not be null");
         this.projectFilesParser = Objects.requireNonNull(projectFilesParser, "projectFilesParser must not be null");
         this.frameworkDetectors = List.copyOf(Objects.requireNonNull(frameworkDetectors, "frameworkDetectors must not be null"));
         this.resultBuilder = Objects.requireNonNull(resultBuilder, "resultBuilder must not be null");
+        this.projectPathSecurityValidator = Objects.requireNonNull(projectPathSecurityValidator, "projectPathSecurityValidator must not be null");
     }
 
     public ProjectDiscoveryResult discover(Path projectPath) {
-        Path normalizedProjectPath = normalizeAndValidate(projectPath);
+        // Validação autoritativa: mesmo que AutoQaExecutionOrchestrator.create() já
+        // tenha validado o path na criação, Discovery nunca confia cegamente nisso
+        // (defesa em profundidade — documentos reidratados do Mongo, execuções
+        // antigas anteriores a este hardening, ou filesystem que mudou entre a
+        // criação e a execução real). Mesma política central, nunca duplicada.
+        Path normalizedProjectPath = projectPathSecurityValidator.validate(projectPath);
         ProjectScanResult scanResult = projectScanner.scan(normalizedProjectPath);
         ParsedProjectFiles parsedProjectFiles = projectFilesParser.parse(scanResult);
         List<FrameworkDetection> detections = frameworkDetectors.stream()
@@ -43,24 +50,5 @@ public class ProjectDiscoveryService {
                 .filter(FrameworkDetection::detected)
                 .toList();
         return resultBuilder.build(normalizedProjectPath, parsedProjectFiles, detections);
-    }
-
-    private Path normalizeAndValidate(Path projectPath) {
-        Objects.requireNonNull(projectPath, "projectPath must not be null");
-        if (projectPath.toString().trim().isEmpty()) {
-            throw new IllegalArgumentException("projectPath must not be blank");
-        }
-
-        Path normalized = projectPath.toAbsolutePath().normalize();
-        if (!Files.exists(normalized, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("projectPath does not exist");
-        }
-        if (!Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("projectPath must be a directory");
-        }
-        if (!Files.isReadable(normalized)) {
-            throw new IllegalArgumentException("projectPath must be readable");
-        }
-        return normalized;
     }
 }
