@@ -17,6 +17,15 @@ server:
     include-message: always
     include-exception: true
 
+# CORS é infraestrutura global da aplicação (afeta Auto QA, Agent/Chat IA,
+# Jira e Cenários via CorsConfig), por isso vive em "app", não em "auto-qa".
+# Default vazio = fail-closed (nenhuma origem cross-origin autorizada) até
+# que o ambiente configure explicitamente, ex.:
+# APP_CORS_ALLOWED_ORIGINS=http://localhost:4200,http://100.83.72.100:9999
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
+
 agents:
   directory: ${AGENTS_DIRECTORY:}
 
