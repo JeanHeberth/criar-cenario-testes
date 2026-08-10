@@ -17,6 +17,7 @@ import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyApproval;
 import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyOperation;
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionApproval;
 import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionCommandId;
+import com.br.criarcenariotestes.business.autoqa.security.ProjectPathSecurityValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,8 +60,13 @@ class AutoQaExecutionConcurrencyTest {
         properties.setAllowCommandExecution(true);
         properties.setSensitiveActionsEnabled(true);
 
+        // Path de teste ("/projeto") nunca passa por create() neste arquivo (só start/apply/execute
+        // sobre documentos já existentes stubados), então a política real de allowedRoots nunca é
+        // exercitada aqui — a cobertura de ProjectPathSecurityValidator vive em
+        // ProjectPathSecurityValidatorTest e nos novos testes de create() em AutoQaExecutionOrchestratorTest.
         orchestrator = new AutoQaExecutionOrchestrator(executionRepository, snapshotRepository, snapshotMapper,
-                stageExecutor, new AutoQaTransitionValidator(), actionResolver, properties);
+                stageExecutor, new AutoQaTransitionValidator(), actionResolver, properties,
+                new ProjectPathSecurityValidator(properties));
 
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(snapshotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

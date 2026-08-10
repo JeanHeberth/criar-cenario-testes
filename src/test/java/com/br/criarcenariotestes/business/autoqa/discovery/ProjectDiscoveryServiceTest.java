@@ -27,6 +27,9 @@ import com.br.criarcenariotestes.business.autoqa.discovery.resolver.PackageManag
 import com.br.criarcenariotestes.business.autoqa.discovery.resolver.TestingFrameworkResolver;
 import com.br.criarcenariotestes.business.autoqa.discovery.scanner.ProjectScanPolicy;
 import com.br.criarcenariotestes.business.autoqa.discovery.scanner.ProjectScanner;
+import com.br.criarcenariotestes.business.autoqa.executionapi.config.AutoQaProperties;
+import com.br.criarcenariotestes.business.autoqa.executionapi.exception.AutoQaProjectPathNotAllowedException;
+import com.br.criarcenariotestes.business.autoqa.security.ProjectPathSecurityValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +46,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("ProjectDiscoveryService - Testes Unitários")
 class ProjectDiscoveryServiceTest {
+
+    /**
+     * Fase 13.1A: ProjectDiscoveryService agora exige ProjectPathSecurityValidator
+     * (validação autoritativa de allowedRoots). Os testes desta classe testam
+     * detecção de framework, não segurança de path — por isso usam uma allowlist
+     * permissiva apontando para a raiz temporária real da JVM (java.io.tmpdir),
+     * onde @TempDir sempre cria seus diretórios. Isso NÃO é um bypass: é uma
+     * allowedRoots legítima e explícita, exercitando a mesma política real
+     * (inclusive canonicalização) usada em produção — só mais ampla, porque aqui
+     * o alvo é testar o scanner, não a allowlist (essa tem sua própria suíte
+     * dedicada em ProjectPathSecurityValidatorTest, e casos de rejeição
+     * específicos do Discovery estão nos testes @Test desta classe abaixo).
+     */
+    private static AutoQaProperties permissiveProperties() {
+        AutoQaProperties properties = new AutoQaProperties();
+        properties.setAllowedRoots(List.of(System.getProperty("java.io.tmpdir")));
+        return properties;
+    }
 
     private final ProjectDiscoveryService service = new ProjectDiscoveryService(
             new ProjectScanner(new ProjectScanPolicy()),
@@ -67,7 +88,8 @@ class ProjectDiscoveryServiceTest {
                     new BuildToolResolver(),
                     new TestingFrameworkResolver(),
                     new DiscoveryConfidenceResolver()
-            )
+            ),
+            new ProjectPathSecurityValidator(permissiveProperties())
     );
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -503,6 +525,91 @@ class ProjectDiscoveryServiceTest {
 
         assertThatThrownBy(() -> service.discover(file))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // --- Fase 13.1A: validação autoritativa de allowedRoots, independente de create() ---
+
+    @Test
+    @DisplayName("Deve rejeitar projectPath fora de auto-qa.allowed-roots mesmo sendo um diretório válido e legível")
+    void deveRejeitarProjectPathForaDeAllowedRoots() throws Exception {
+        AutoQaProperties restrictedElsewhere = new AutoQaProperties();
+        restrictedElsewhere.setAllowedRoots(List.of(Files.createTempDirectory("outra-raiz-autorizada").toString()));
+        ProjectDiscoveryService restrictedService = new ProjectDiscoveryService(
+                new ProjectScanner(new ProjectScanPolicy()),
+                new ProjectFilesParser(new PackageJsonParser(new ObjectMapper()), new MavenPomParser(),
+                        new GradleBuildParser(), new PythonManifestParser()),
+                List.of(new PlaywrightDetector()),
+                new ProjectDiscoveryResultBuilder(new AutomationFrameworkResolver(), new AutomationLanguageResolver(),
+                        new PackageManagerResolver(), new BuildToolResolver(), new TestingFrameworkResolver(),
+                        new DiscoveryConfidenceResolver()),
+                new ProjectPathSecurityValidator(restrictedElsewhere));
+
+        assertThatThrownBy(() -> restrictedService.discover(tempDir))
+                .isInstanceOf(AutoQaProjectPathNotAllowedException.class);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar qualquer projectPath quando auto-qa.allowed-roots estiver vazia (fail-closed)")
+    void deveRejeitarQuandoAllowedRootsVazia() {
+        ProjectDiscoveryService failClosedService = new ProjectDiscoveryService(
+                new ProjectScanner(new ProjectScanPolicy()),
+                new ProjectFilesParser(new PackageJsonParser(new ObjectMapper()), new MavenPomParser(),
+                        new GradleBuildParser(), new PythonManifestParser()),
+                List.of(new PlaywrightDetector()),
+                new ProjectDiscoveryResultBuilder(new AutomationFrameworkResolver(), new AutomationLanguageResolver(),
+                        new PackageManagerResolver(), new BuildToolResolver(), new TestingFrameworkResolver(),
+                        new DiscoveryConfidenceResolver()),
+                new ProjectPathSecurityValidator(new AutoQaProperties()));
+
+        assertThatThrownBy(() -> failClosedService.discover(tempDir))
+                .isInstanceOf(AutoQaProjectPathNotAllowedException.class);
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar symlink dentro de uma root autorizada que aponte para fora dela (defesa em profundidade)")
+    void deveRejeitarSymlinkEscapandoDaRootAutorizada() throws Exception {
+        Path allowedRoot = Files.createTempDirectory("root-autorizada-symlink");
+        Path outsideTarget = Files.createTempDirectory("fora-da-root-symlink");
+        Path escapeLink = allowedRoot.resolve("external");
+        Files.createSymbolicLink(escapeLink, outsideTarget);
+
+        AutoQaProperties restricted = new AutoQaProperties();
+        restricted.setAllowedRoots(List.of(allowedRoot.toString()));
+        ProjectDiscoveryService restrictedService = new ProjectDiscoveryService(
+                new ProjectScanner(new ProjectScanPolicy()),
+                new ProjectFilesParser(new PackageJsonParser(new ObjectMapper()), new MavenPomParser(),
+                        new GradleBuildParser(), new PythonManifestParser()),
+                List.of(new PlaywrightDetector()),
+                new ProjectDiscoveryResultBuilder(new AutomationFrameworkResolver(), new AutomationLanguageResolver(),
+                        new PackageManagerResolver(), new BuildToolResolver(), new TestingFrameworkResolver(),
+                        new DiscoveryConfidenceResolver()),
+                new ProjectPathSecurityValidator(restricted));
+
+        assertThatThrownBy(() -> restrictedService.discover(escapeLink))
+                .isInstanceOf(AutoQaProjectPathNotAllowedException.class);
+    }
+
+    @Test
+    @DisplayName("Deve aceitar projectPath dentro de auto-qa.allowed-roots (caminho feliz da validação autoritativa)")
+    void deveAceitarProjectPathDentroDeAllowedRoots() throws Exception {
+        write("playwright.config.ts", "export default {};");
+        createPackageJson(List.of("@playwright/test"), List.of());
+
+        AutoQaProperties restricted = new AutoQaProperties();
+        restricted.setAllowedRoots(List.of(tempDir.getParent().toString()));
+        ProjectDiscoveryService restrictedService = new ProjectDiscoveryService(
+                new ProjectScanner(new ProjectScanPolicy()),
+                new ProjectFilesParser(new PackageJsonParser(new ObjectMapper()), new MavenPomParser(),
+                        new GradleBuildParser(), new PythonManifestParser()),
+                List.of(new PlaywrightDetector()),
+                new ProjectDiscoveryResultBuilder(new AutomationFrameworkResolver(), new AutomationLanguageResolver(),
+                        new PackageManagerResolver(), new BuildToolResolver(), new TestingFrameworkResolver(),
+                        new DiscoveryConfidenceResolver()),
+                new ProjectPathSecurityValidator(restricted));
+
+        ProjectDiscoveryResult result = restrictedService.discover(tempDir);
+
+        assertThat(result.getAutomationFramework()).isEqualTo(AutomationFramework.PLAYWRIGHT);
     }
 
     @Test
