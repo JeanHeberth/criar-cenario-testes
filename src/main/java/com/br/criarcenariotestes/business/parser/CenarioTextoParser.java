@@ -31,7 +31,7 @@ public class CenarioTextoParser {
                 continue;
             }
 
-            String nome = extrairCampoMultiplo(texto, "Nome");
+            String nome = extrairCampoMultiplo(texto, "Nome", "Título");
             String objetivo = extrairCampoMultiplo(texto, "Objetivo");
             String precondicao = extrairCampoMultiplo(texto, "Pré-condições", "Precondição", "Pré-condição");
             String passos = extrairCampoMultiplo(texto, "Passos", "Script de Teste \\(Passo-a-Passo\\)");
@@ -62,7 +62,7 @@ public class CenarioTextoParser {
                     .precondicao(precondicao)
                     .scriptTeste(passos)
                     .resultadoEsperado(resultadoEsperado)
-                    .variaveis(valorOuPadrao(extrairCampo(texto, "Variáveis"), "Não se aplica"))
+                    .variaveis(valorOuPadrao(extrairCampoMultiplo(texto, "Variáveis", "Massa de dados"), "Não se aplica"))
                     .componente(extrairCampo(texto, "Componente"))
                     .rotulos(extrairCampo(texto, "Rótulos"))
                     .proposito(valorOuPadrao(extrairCampo(texto, "Propósito"), "TESTE MANUAL"))
@@ -85,12 +85,19 @@ public class CenarioTextoParser {
     }
 
     private String extrairCampo(String bloco, String campo) {
+        // Fase 15/FASE15-BUG-001: "Título" e "Massa de dados" são os rótulos
+        // reais usados pelo agente ativo (agents/gerador_cenarios_testes.agent.md),
+        // aliases de "Nome" e "Variáveis" respectivamente — precisam constar
+        // aqui na posição correta (mesma ordem em que o agente as emite) para
+        // que o cálculo de fronteira (nextLabels) pare no lugar certo.
         String[] campos = {
                 "Nome",
+                "Título",
                 "Objetivo",
                 "Pré-condições",
                 "Pré-condição",
                 "Precondição",
+                "Massa de dados",
                 "Passos",
                 "Script de Teste \\(Passo-a-Passo\\)",
                 "Resultado esperado",
@@ -126,14 +133,19 @@ public class CenarioTextoParser {
                 .reduce((a, b) -> a + "|" + b)
                 .orElse("");
 
-        String regex = "(?im)^\\s*(?:\\*\\*\\s*)?" + Pattern.quote(campo) + "(?:\\s*\\*\\*)?\\s*:\\s*(.+?)(?=^\\s*(?:\\*\\*\\s*)?(?:" + nextLabels + ")(?:\\s*\\*\\*)?\\s*:|^\\s*---|\\Z)";
+        // Fase 15/FASE15-BUG-001: o agente ativo emite cada campo como item de
+        // lista markdown ("- Objetivo: ..."), nunca no início puro da linha —
+        // "(?:[-*]\\s*)?" (aqui e na fronteira do lookahead) torna o marcador
+        // de bullet opcional, sem quebrar o formato antigo (sem bullet), já
+        // coberto pelos testes existentes.
+        String regex = "(?im)^\\s*(?:[-*]\\s*)?(?:\\*\\*\\s*)?" + Pattern.quote(campo) + "(?:\\s*\\*\\*)?\\s*:\\s*(.+?)(?=^\\s*(?:[-*]\\s*)?(?:\\*\\*\\s*)?(?:" + nextLabels + ")(?:\\s*\\*\\*)?\\s*:|^\\s*---|\\Z)";
 
         var matcher = Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(bloco);
         if (matcher.find()) {
             return limparTextoParaParse(matcher.group(1)).trim();
         }
 
-        String fallbackRegex = "(?i)" + Pattern.quote(campo) + "\\s*:\\s*([\\s\\S]*?)(?=\\n(?:(?:" + nextLabels.replace("|", ")|(?:") + ")):|$)";
+        String fallbackRegex = "(?i)" + Pattern.quote(campo) + "\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:[-*]\\s*)?(?:(?:" + nextLabels.replace("|", ")|(?:") + ")):|$)";
         var fallbackMatcher = Pattern.compile(fallbackRegex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(bloco);
         return fallbackMatcher.find() ? limparTextoParaParse(fallbackMatcher.group(1)).trim() : "";
     }
@@ -224,10 +236,15 @@ public class CenarioTextoParser {
                 .findFirst()
                 .orElse("");
 
-        return limparTextoParaParse(linha)
+        String linhaLimpa = limparTextoParaParse(linha)
                 .replace("^", "")
                 .replace("#", "")
                 .trim();
+
+        // Fase 15/FASE15-BUG-001: o agente ativo não emite um campo "Título:"
+        // separado — usa "Cenário N: <título>" como cabeçalho corrido. Remove
+        // esse prefixo para o nome persistido ficar só o título real.
+        return linhaLimpa.replaceFirst("(?i)^cen[aá]rio\\s*\\d*\\s*:\\s*", "").trim();
     }
 
     private String valorOuPadrao(String valor, String padrao) {

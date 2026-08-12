@@ -140,6 +140,92 @@ class CenarioTextoParserFallbackTest {
     }
 
     @Test
+    void deveExtrairCamposDoFormatoRealDoAgenteGeradorDeCenarios() {
+        // Arrange - formato REAL produzido pelo agente ativo em produção
+        // (agents/gerador_cenarios_testes.agent.md): cada campo em bullet "- "
+        // e vocabulário "Título"/"Massa de dados" em vez de "Nome"/"Variáveis".
+        // Reproduz literalmente o bug FASE15-BUG-001 (Fase 15, teste manual
+        // end-to-end): campos vazando um no outro e conteúdo duplicado.
+        String formatoReal = """
+            ---
+            Cenário 1: Login bem-sucedido de usuário ativo sem autenticação em dois fatores
+            - Objetivo: Validar que um usuário ativo, sem 2FA habilitado, consegue acessar o sistema normalmente.
+            - Pré-condições: Usuário está cadastrado, ativo, sem 2FA habilitado.
+            - Massa de dados: E-mail válido; senha correta.
+            - Passos:
+              1. Acessar a tela de login.
+              2. Informar e-mail e senha corretos.
+              3. Clicar em "Entrar".
+            - Resultado esperado: Usuário é autenticado e redirecionado para a página inicial da aplicação.
+            - Tipo: Positivo
+            - Prioridade: P0
+            - Tags: fluxo-principal, login, sem-2FA
+            ---
+            Cenário 2: Tentativa de login com e-mail inexistente
+            - Objetivo: Verificar que o sistema não revela se o e-mail existe e exibe mensagem genérica.
+            - Pré-condições: E-mail informado não está cadastrado no sistema.
+            - Massa de dados: E-mail inexistente; senha qualquer.
+            - Passos:
+              1. Acessar a tela de login.
+              2. Informar e-mail não cadastrado e qualquer senha.
+              3. Clicar em "Entrar".
+            - Resultado esperado: Mensagem genérica de credenciais inválidas sem revelar existência do e-mail.
+            - Tipo: Negativo
+            - Prioridade: P0
+            - Tags: negativo, seguranca, mensagem-generica
+            ---
+            """;
+
+        List<CenarioItem> cenarios = parser.parsear(formatoReal);
+
+        assertEquals(2, cenarios.size(), "Deve extrair os 2 cenários, sem misturar um no outro");
+
+        CenarioItem c1 = cenarios.get(0);
+
+        assertEquals(
+                "Login bem-sucedido de usuário ativo sem autenticação em dois fatores",
+                c1.getNome(),
+                "Nome (via alias 'Título') não deve vazar o resto do bloco"
+        );
+        assertEquals(
+                "Validar que um usuário ativo, sem 2FA habilitado, consegue acessar o sistema normalmente.",
+                c1.getObjetivo(),
+                "Objetivo não deve vazar Pré-condições/Massa de dados/Passos/etc."
+        );
+        assertEquals(
+                "Usuário está cadastrado, ativo, sem 2FA habilitado.",
+                c1.getPrecondicao(),
+                "Pré-condições não deve vazar Massa de dados/Passos/etc."
+        );
+        assertEquals(
+                "E-mail válido; senha correta.",
+                c1.getVariaveis(),
+                "Variáveis deve ser populado a partir do alias 'Massa de dados', não cair no fallback 'Não se aplica'"
+        );
+        assertFalse(
+                c1.getScriptTeste().contains("Resultado esperado"),
+                "Script de Teste (Passos) não deve vazar o Resultado Esperado"
+        );
+        assertFalse(
+                c1.getScriptTeste().toLowerCase().contains("tipo:") || c1.getScriptTeste().toLowerCase().contains("prioridade:"),
+                "Script de Teste (Passos) não deve vazar metadados (Tipo/Prioridade/Tags)"
+        );
+        assertEquals(
+                "Usuário é autenticado e redirecionado para a página inicial da aplicação.",
+                c1.getResultadoEsperado(),
+                "Resultado Esperado não deve incluir Tipo/Prioridade/Tags nem duplicar o próprio texto"
+        );
+
+        CenarioItem c2 = cenarios.get(1);
+        assertEquals("Tentativa de login com e-mail inexistente", c2.getNome());
+        assertEquals("E-mail inexistente; senha qualquer.", c2.getVariaveis());
+        assertEquals(
+                "Mensagem genérica de credenciais inválidas sem revelar existência do e-mail.",
+                c2.getResultadoEsperado()
+        );
+    }
+
+    @Test
     void deveProcessarMultiplosCenariosNoMesmoTexto() {
         // Arrange
         String multiplos = """
