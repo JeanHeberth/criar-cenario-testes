@@ -188,6 +188,39 @@ class BddFormatterAgentTest {
     }
 
     @Test
+    void deveSepararEntaoQuandoBddVemComoProsaCorridaSeparadaPorPonto() {
+        // Arrange - FASE15-BUG-003: reproduz o padrão real observado na Fase 15,
+        // em que a IA escreve os passos como prosa corrida separada por ". "
+        // em vez de uma linha por palavra-chave (mesmo padrão visto nos passos
+        // numerados "1. Acessar... 2. Informar..." antes desta correção).
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login válido");
+        item.setScriptTeste(
+                "Dado que o usuário está na tela de login. "
+                        + "Quando ele informa credenciais válidas. "
+                        + "Então o login é realizado com sucesso.");
+        item.setResultadoEsperado("");
+
+        List<CenarioItem> cenarios = new ArrayList<>();
+        cenarios.add(item);
+        context.setCenarios(cenarios);
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        CenarioItem resultado = context.getCenarios().get(0);
+
+        assertTrue(resultado.getScriptTeste().contains("Dado"));
+        assertTrue(resultado.getScriptTeste().contains("Quando"));
+        assertFalse(resultado.getScriptTeste().contains("Então"),
+                "Passos não devem conter 'Então' mesmo quando a IA escreve tudo em prosa corrida");
+        assertNotNull(resultado.getResultadoEsperado());
+        assertTrue(resultado.getResultadoEsperado().contains("Então"),
+                "Resultado Esperado deve conter o trecho 'Então' extraído da prosa corrida");
+    }
+
+    @Test
     void deveManterCamposVaziosQuandoSemTextoBdd() {
         // Arrange
         CenarioItem item = new CenarioItem();

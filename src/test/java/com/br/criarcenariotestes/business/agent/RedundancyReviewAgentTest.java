@@ -4,6 +4,7 @@ import com.br.criarcenariotestes.business.ai.AiProvider;
 import com.br.criarcenariotestes.business.ai.AiProviderResolver;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.parser.CenarioTextoParser;
+import com.br.criarcenariotestes.business.validation.GeneratedScenariosValidator;
 import com.br.criarcenariotestes.business.workflow.WorkflowContext;
 import com.br.criarcenariotestes.business.workflow.WorkflowType;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
@@ -11,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,13 +35,14 @@ class RedundancyReviewAgentTest {
     @Mock
     private CenarioTextoParser cenarioTextoParser;
 
-    @InjectMocks
     private RedundancyReviewAgent agent;
 
     private WorkflowContext context;
 
     @BeforeEach
     void setUp() {
+        agent = new RedundancyReviewAgent(aiProviderResolver, cenarioTextoParser, new GeneratedScenariosValidator());
+
         CenarioRequest request = new CenarioRequest(
                 "Login OAuth",
                 "Sistema de login",
@@ -149,5 +150,116 @@ class RedundancyReviewAgentTest {
 
         // Assert
         assertThat(context.getCenariosRevisados()).isEqualTo(context.getCenarios());
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-002: deve manter cenários originais (fail closed) quando a revisão retornar um plano de arquivos")
+    void deveManterCenariosOriginaisQuandoRevisaoRetornarPlanoDeArquivos() {
+        // Arrange
+        String planoDeGeracao = """
+                📋 Plano de Geração
+                - Pasta base: `x/`
+                - Arquivos a criar:
+                  - `a.md`
+                """;
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(planoDeGeracao);
+
+        // Act
+        agent.executar(context);
+
+        // Assert: nunca deve inventar cenários a partir de um plano mal-formado.
+        assertThat(context.getCenariosRevisados()).isEqualTo(context.getCenarios());
+        verify(cenarioTextoParser, never()).parsear(anyString());
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-002: deve manter cenários originais (fail closed) quando a revisão não extrair nenhum cenário")
+    void deveManterCenariosOriginaisQuandoRevisaoNaoExtrairNenhumCenario() {
+        // Arrange
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn("---\nNome: CT001\n---");
+        when(cenarioTextoParser.parsear(anyString())).thenReturn(List.of());
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenariosRevisados()).isEqualTo(context.getCenarios());
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003: estrutura Dado/Quando/Então deve sobreviver à revisão")
+    void estruturaBddDevePermanecerAposRevisao() {
+        // Arrange - entrada em BDD válido
+        CenarioItem cenarioBdd = new CenarioItem();
+        cenarioBdd.setNome("Login com credenciais válidas");
+        cenarioBdd.setScriptTeste(
+                "Dado que o usuário está na tela de login\n"
+                        + "Quando ele informa credenciais válidas\n"
+                        + "Então o login é realizado com sucesso");
+        context.setCenarios(List.of(cenarioBdd));
+
+        String respostaRevisada = "---\nNome: Login com credenciais válidas\nPassos:\n"
+                + "Dado que o usuário está na tela de login\n"
+                + "Quando ele informa credenciais válidas\n"
+                + "Então o login é realizado com sucesso\n---";
+
+        CenarioItem cenarioRevisado = new CenarioItem();
+        cenarioRevisado.setNome("Login com credenciais válidas");
+        cenarioRevisado.setScriptTeste(
+                "Dado que o usuário está na tela de login\n"
+                        + "Quando ele informa credenciais válidas\n"
+                        + "Então o login é realizado com sucesso");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(cenarioRevisado));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenariosRevisados()).hasSize(1);
+        assertThat(context.getCenariosRevisados().get(0).getScriptTeste())
+                .contains("Dado", "Quando", "Então");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003: scriptTeste não deve incorporar o texto do Resultado Esperado ao final")
+    void scriptTesteNaoDeveIncorporarResultadoEsperado() {
+        // Arrange - resposta bem-formada do reviewer, com Passos e Resultado Esperado
+        // em campos separados (formato real esperado do agente)
+        String respostaRevisada = """
+                ---
+                Nome: Login com credenciais válidas
+                Passos:
+                Dado que o usuário está na tela de login
+                Quando ele informa credenciais válidas
+                Então o login é processado
+                Resultado esperado: Usuário autenticado e redirecionado para a página inicial
+                ---
+                """;
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+
+        // usa o parser real só para este teste, para provar que campos bem separados
+        // na resposta não vazam um no outro após a revisão
+        CenarioTextoParser parserReal = new CenarioTextoParser();
+        RedundancyReviewAgent agentComParserReal =
+                new RedundancyReviewAgent(aiProviderResolver, parserReal, new GeneratedScenariosValidator());
+
+        // Act
+        agentComParserReal.executar(context);
+
+        // Assert
+        CenarioItem revisado = context.getCenariosRevisados().get(0);
+        assertThat(revisado.getScriptTeste())
+                .as("Passos não deve conter o texto do Resultado Esperado colado ao final")
+                .doesNotContain("Usuário autenticado e redirecionado para a página inicial");
+        assertThat(revisado.getResultadoEsperado())
+                .isEqualTo("Usuário autenticado e redirecionado para a página inicial");
     }
 }

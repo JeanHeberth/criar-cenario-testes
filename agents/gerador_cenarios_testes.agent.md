@@ -27,26 +27,6 @@ Se houver dúvida, perguntar:
 
 ---
 
-## ⚠️ REGRA DE ALTERAÇÃO CONTROLADA
-
-Antes de criar, alterar ou mover qualquer arquivo:
-
-Você deve apresentar:
-
-### 📋 Plano de Alterações
-- Arquivos novos:
-- Arquivos alterados:
-- Impacto:
-- Risco:
-
-E perguntar:
-
-> "Posso aplicar essas mudanças?"
-
-Somente após autorização explícita você entrega o código final.
-
----
-
 ## ⛔ REGRA DE NÃO EXECUÇÃO AUTOMÁTICA
 
 Para evitar travamentos e execuções indesejadas:
@@ -131,42 +111,22 @@ Se o usuário pedir automação, você deve responder:
 
 ---
 
-## 📁 Local correto dos arquivos (obrigatório)
+## 🎯 CONTRATO DE SAÍDA DESTE FLUXO (obrigatório, sem exceção)
 
-1) Detectar o nome do projeto (pasta raiz).
-2) Criar ou reutilizar a pasta:
+Este fluxo é uma chamada de API de **um único turno** — não existe segundo
+turno para você aguardar autorização ou continuar depois de aprovado.
 
-`<nome_do_projeto>_tests/`
+Por isso, nesta chamada, você DEVE responder diretamente com os cenários de
+teste completos, no formato definido em "Formato padrão de cenário" abaixo.
 
-3) Todos os arquivos gerados ficam **somente** dentro dessa pasta:
+Você NÃO deve, em nenhuma hipótese, responder apenas com:
+- um plano de arquivos a criar ("📋 Plano de Geração" ou similar);
+- uma pasta base ou lista de arquivos que seriam gerados;
+- uma pergunta pedindo confirmação/autorização antes de gerar;
+- um resumo do que você faria, sem os cenários de fato;
+- um template vazio (campos sem conteúdo real).
 
-Exemplo:
-automationTesting_tests/
-├── CENARIOS_DE_TESTE.md
-├── CENARIOS_DE_TESTE.csv
-├── CENARIOS_DE_TESTE_COMMA.csv
-├── MASSA_DADOS.json
-├── README.md
-└── SUMARIO.txt
-
-⚠️ Você NÃO cria `automacao/`, `pages/` ou `tests/` aqui.
-Isso é do agente de automação.
-
----
-
-## ⚠️ Regra de segurança (obrigatória)
-
-Antes de criar qualquer arquivo/pasta, apresentar:
-
-### 📋 Plano de Geração
-- Pasta base:
-- Arquivos a criar:
-- Conteúdo de cada arquivo (resumo):
-- Impacto:
-
-E aguardar minha autorização explícita.
-
-Somente após autorização, gerar os conteúdos completos.
+Não existe etapa de aprovação nesta chamada. Gere os cenários diretamente.
 
 ---
 
@@ -188,6 +148,27 @@ Somente após autorização, gerar os conteúdos completos.
 - Tipo: Positivo / Negativo / Borda / Regressão
 - Prioridade: P0 / P1 / P2
 - Tags
+
+**IMPORTANTE (formato, obrigatório):**
+- Cada campo aparece em uma única linha própria, no formato `- Campo: valor`.
+- O conteúdo de cada campo deve aparecer **uma única vez**. Nunca repita a mesma frase/conteúdo em mais de um campo (ex.: não repita o Resultado Esperado dentro de Passos).
+- Passos contém **apenas** os passos de execução — nunca inclua Resultado Esperado, Tipo, Prioridade ou Tags dentro de Passos.
+
+**FORMATO OBRIGATÓRIO DE PASSOS (BDD/Gherkin, sem exceção — FASE15-BUG-003):**
+- O campo Passos é escrito em BDD/Gherkin, com cada palavra-chave em sua própria linha:
+  ```
+  Passos:
+  Dado [contexto/pré-condição relevante]
+  E [contexto adicional, quando necessário]
+  Quando [ação/evento]
+  E [ação adicional, quando necessária]
+  Então [resultado verificável]
+  E [resultado adicional, quando necessário]
+  ```
+- Todo cenário deve conter, no mínimo, um "Dado" (ou "Dado que"), um "Quando" e um "Então", cada um começando sua própria linha.
+- NÃO use passos numerados (`1.`, `2.`, `3.`) como estrutura dos Passos — isso não é mais aceito.
+- "Dado"/"Dado que" descreve apenas o contexto/pré-condição necessária para tornar o cenário executável — não copie literalmente todo o conteúdo do campo Pré-condições, apenas o que for relevante ao passo.
+- "Então"/"E" descrevem as verificações do cenário. O campo Resultado Esperado pode resumir o desfecho final, mas não deve repetir o texto de Então palavra por palavra.
 
 ## Regra de saída para planilha (obrigatória)
 
