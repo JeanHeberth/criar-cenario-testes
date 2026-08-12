@@ -138,15 +138,20 @@ public class BddFormatterAgent implements BaseAgent {
     }
     
     private String normalizarTexto(String texto) {
+        // FASE15-BUG-003: a IA às vezes escreve os passos como prosa corrida
+        // separada por ". " (mesmo padrão observado nos antigos passos
+        // numerados) em vez de uma linha por palavra-chave. Por isso a
+        // fronteira de quebra também precisa reconhecer pontuação de fim de
+        // frase (".", ";", ":") antes da keyword, não só letra/dígito.
         return texto
             .replaceAll("\\r", "")
             .replaceAll("\\s+", " ")
             // Quebrar antes de cada keyword BDD
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>])\\s+(Dado que)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>])\\s+(Dado)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>])\\s+(Quando)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>])\\s+(Então)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>])\\s+(E)\\s+", "$1\n$2 ")
+            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Dado que)", "$1\n$2")
+            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Dado)", "$1\n$2")
+            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Quando)", "$1\n$2")
+            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Então)", "$1\n$2")
+            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(E)\\s+", "$1\n$2 ")
             // Limpar espaços extras
             .replaceAll("\\n{2,}", "\n")
             .trim();

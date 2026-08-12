@@ -3,6 +3,7 @@ package com.br.criarcenariotestes.business.agent;
 import com.br.criarcenariotestes.business.ai.AiProvider;
 import com.br.criarcenariotestes.business.ai.AiProviderResolver;
 import com.br.criarcenariotestes.business.parser.CenarioTextoParser;
+import com.br.criarcenariotestes.business.validation.GeneratedScenariosValidator;
 import com.br.criarcenariotestes.business.workflow.WorkflowContext;
 import com.br.criarcenariotestes.business.workflow.WorkflowType;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
@@ -18,9 +19,10 @@ import java.util.List;
 public class RedundancyReviewAgent implements BaseAgent {
 
     private static final Logger log = LoggerFactory.getLogger(RedundancyReviewAgent.class);
-    
+
     private final AiProviderResolver aiProviderResolver;
     private final CenarioTextoParser cenarioTextoParser;
+    private final GeneratedScenariosValidator generatedScenariosValidator;
 
     @Override
     public void executar(WorkflowContext context) {
@@ -39,16 +41,32 @@ public class RedundancyReviewAgent implements BaseAgent {
             AiProvider provider = aiProviderResolver.getActiveProvider();
             String respostaIa = provider.gerarResposta(systemPrompt, userPrompt);
             
+            GeneratedScenariosValidator.ValidationResult validacao =
+                    generatedScenariosValidator.validarRespostaBruta(respostaIa);
+
+            if (!validacao.valido()) {
+                log.warn("Revisão retornou conteúdo estruturalmente inválido ('{}'). " +
+                        "Mantendo cenários originais (fail closed).", validacao.motivo());
+                context.setCenariosRevisados(context.getCenarios());
+                return;
+            }
+
             List<CenarioItem> cenariosRevisados = cenarioTextoParser.parsear(respostaIa);
-            
+
+            if (cenariosRevisados.isEmpty()) {
+                log.warn("Revisão não extraiu nenhum cenário válido. Mantendo cenários originais (fail closed).");
+                context.setCenariosRevisados(context.getCenarios());
+                return;
+            }
+
             context.setCenariosRevisados(cenariosRevisados);
             context.addMetadata("revisao_provider", provider.getName());
             context.addMetadata("cenarios_originais", context.getCenarios().size());
             context.addMetadata("cenarios_revisados", cenariosRevisados.size());
-            
-            log.info("Revisão concluída. provider='{}', original={}, revisados={}", 
-                provider.getName(), 
-                context.getCenarios().size(), 
+
+            log.info("Revisão concluída. provider='{}', original={}, revisados={}",
+                provider.getName(),
+                context.getCenarios().size(),
                 cenariosRevisados.size());
             
         } catch (Exception e) {
@@ -71,15 +89,23 @@ public class RedundancyReviewAgent implements BaseAgent {
     private String buildSystemPrompt() {
         return """
             Você é um revisor de casos de teste especializado em otimização.
-            
+
             Sua função é:
             - Identificar cenários redundantes ou duplicados
             - Sugerir parametrização com variáveis quando aplicável
             - Consolidar cenários similares
             - Manter cobertura de testes sem perder qualidade
-            
+
             Retorne os cenários otimizados no mesmo formato original.
             Remova apenas redundâncias reais, não sacrifique cobertura.
+
+            REGRA OBRIGATÓRIA DE FORMATO (FASE15-BUG-003):
+            - O campo Passos recebido está em BDD/Gherkin (Dado/Dado que, E, Quando, Então).
+              Você DEVE preservar essa estrutura na saída. NUNCA converta Passos de volta
+              para lista numerada (1., 2., 3.) ou para texto corrido sem as palavras-chave.
+            - Cada campo aparece uma única vez. Passos NÃO deve incorporar o texto de
+              Resultado Esperado, Tipo, Prioridade ou Tags — essas informações continuam
+              em seus próprios campos, nunca coladas ao final do último passo.
             """;
     }
     
