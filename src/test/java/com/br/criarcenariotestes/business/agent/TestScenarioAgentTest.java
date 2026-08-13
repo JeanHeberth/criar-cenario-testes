@@ -75,7 +75,7 @@ class TestScenarioAgentTest {
         cenario1.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado com sucesso");
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaIA);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn(respostaIA);
         when(aiProvider.getName()).thenReturn("OpenAI");
         when(cenarioTextoParser.parsear(respostaIA)).thenReturn(List.of(cenario1));
         when(cenarioTextoParser.extrairCriterios(respostaIA))
@@ -116,7 +116,7 @@ class TestScenarioAgentTest {
         cenario1.setScriptTeste("Dado que o usuário está autenticado\nQuando ele executa a ação\nEntão o resultado é validado");
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString()))
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS)))
                 .thenReturn("---\nNome: CT001\nObjetivo: Objetivo do CT001\n---");
         when(cenarioTextoParser.parsear(anyString())).thenReturn(List.of(cenario1));
 
@@ -124,7 +124,7 @@ class TestScenarioAgentTest {
         agent.executar(context);
 
         // Assert
-        verify(aiProvider).gerarResposta(anyString(), anyString());
+        verify(aiProvider).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
     }
 
     @Test
@@ -132,7 +132,7 @@ class TestScenarioAgentTest {
     void deveLancarExcecaoQuandoFalhar() {
         // Arrange
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString()))
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS)))
                 .thenThrow(new RuntimeException("Erro de conexão"));
 
         // Act & Assert
@@ -159,7 +159,7 @@ class TestScenarioAgentTest {
         cenarioValido.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado com sucesso");
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString()))
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS)))
                 .thenReturn(planoDeGeracao, respostaValida);
         when(aiProvider.getName()).thenReturn("OpenAI");
         when(cenarioTextoParser.parsear(planoDeGeracao)).thenReturn(List.of());
@@ -171,7 +171,7 @@ class TestScenarioAgentTest {
         // Assert
         assertThat(context.getCenarios()).hasSize(1);
         assertThat(context.getCenarios().get(0).getNome()).isEqualTo("Login válido");
-        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString());
+        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
     }
 
     @Test
@@ -186,7 +186,7 @@ class TestScenarioAgentTest {
                 """;
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(planoDeGeracao);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn(planoDeGeracao);
         when(cenarioTextoParser.parsear(planoDeGeracao)).thenReturn(List.of());
 
         // Act & Assert
@@ -195,7 +195,7 @@ class TestScenarioAgentTest {
                 .hasMessageContaining("Falha na geração de cenários");
 
         // Exatamente 1 retry: 2 chamadas ao provider, nunca mais.
-        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString());
+        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
         assertThat(context.getCenarios()).isNull();
     }
 
@@ -204,14 +204,14 @@ class TestScenarioAgentTest {
     void deveLancarExcecaoQuandoRespostaVierVaziaMesmoAposRetry() {
         // Arrange
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn("   ");
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn("   ");
 
         // Act & Assert
         assertThatThrownBy(() -> agent.executar(context))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Falha na geração de cenários");
 
-        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString());
+        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
     }
 
     @Test
@@ -232,7 +232,7 @@ class TestScenarioAgentTest {
         cenarioComBdd.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado com sucesso");
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString()))
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS)))
                 .thenReturn(respostaComPassosNumerados, respostaComBdd);
         when(aiProvider.getName()).thenReturn("OpenAI");
         when(cenarioTextoParser.parsear(respostaComPassosNumerados)).thenReturn(List.of(cenarioComPassosNumerados));
@@ -244,7 +244,7 @@ class TestScenarioAgentTest {
         // Assert - retry exatamente 1 vez, fluxo continua com sucesso
         assertThat(context.getCenarios()).hasSize(1);
         assertThat(context.getCenarios().get(0).getScriptTeste()).contains("Dado", "Quando", "Então");
-        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString());
+        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
     }
 
     @Test
@@ -258,7 +258,7 @@ class TestScenarioAgentTest {
         cenarioComPassosNumerados.setScriptTeste("1. Acessar\n2. Logar");
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaComPassosNumerados);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn(respostaComPassosNumerados);
         when(cenarioTextoParser.parsear(respostaComPassosNumerados)).thenReturn(List.of(cenarioComPassosNumerados));
 
         // Act & Assert
@@ -266,7 +266,7 @@ class TestScenarioAgentTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Falha na geração de cenários");
 
-        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString());
+        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
         assertThat(context.getCenarios()).isNull();
     }
 }

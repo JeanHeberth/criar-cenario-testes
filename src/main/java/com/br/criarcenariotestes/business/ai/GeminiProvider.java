@@ -32,13 +32,24 @@ public class GeminiProvider implements AiProvider {
 
     @Override
     public String gerarResposta(String systemPrompt, String userPrompt) {
+        return gerarResposta(systemPrompt, userPrompt, null);
+    }
+
+    @Override
+    public String gerarResposta(String systemPrompt, String userPrompt, Integer maxTokensOverride) {
         return gerarRespostaComHistorico(systemPrompt,
-                List.of(Map.of("role", "user", "content", userPrompt)));
+                List.of(Map.of("role", "user", "content", userPrompt)), maxTokensOverride);
     }
 
     @Override
     public String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history) {
+        return gerarRespostaComHistorico(systemPrompt, history, null);
+    }
+
+    private String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history, Integer maxTokensOverride) {
         validarConfiguracao();
+
+        int maxOutputTokens = maxTokensOverride != null ? maxTokensOverride : properties.getMaxOutputTokens();
 
         String urlFinal = properties.getUrl()
                 + "/"
@@ -49,7 +60,7 @@ public class GeminiProvider implements AiProvider {
         log.info("Gemini request. model='{}', url='{}', maxOutputTokens={}, systemPromptLength={}, historySize={}",
                 properties.getModel(),
                 properties.getUrl(),
-                properties.getMaxOutputTokens(),
+                maxOutputTokens,
                 systemPrompt == null ? 0 : systemPrompt.length(),
                 history == null ? 0 : history.size());
 
@@ -84,7 +95,7 @@ public class GeminiProvider implements AiProvider {
         Map<String, Object> generationConfig = new HashMap<>();
         generationConfig.put("temperature", 0.7);
         // Evita truncar resposta e perder cenarios na saida.
-        generationConfig.put("maxOutputTokens", properties.getMaxOutputTokens());
+        generationConfig.put("maxOutputTokens", maxOutputTokens);
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("contents", contents);
@@ -97,18 +108,27 @@ public class GeminiProvider implements AiProvider {
             log.info("✅ Gemini status: {}", response.getStatusCode());
 
             JsonNode root = mapper.readTree(response.getBody());
-            String result = root.path("candidates")
-                    .get(0)
+            JsonNode primeiroCandidato = root.path("candidates").get(0);
+            String result = primeiroCandidato
                     .path("content")
                     .path("parts")
                     .get(0)
                     .path("text")
                     .asText();
+            // FASE15-BUG-006: mesmo raciocínio do OpenAiProvider - "MAX_TOKENS"
+            // indica corte pelo limite de saída, apenas observabilidade.
+            String finishReason = primeiroCandidato.path("finishReason").asText(null);
 
-            log.info("Gemini response recebida. model='{}', responseLength={}, preview='{}'",
+            log.info("Gemini response recebida. model='{}', responseLength={}, finishReason='{}', preview='{}'",
                     properties.getModel(),
                     result == null ? 0 : result.length(),
+                    finishReason,
                     gerarPreview(result));
+
+            if ("MAX_TOKENS".equals(finishReason)) {
+                log.warn("Gemini truncou a resposta pelo limite de tokens de saída (finishReason='MAX_TOKENS'). " +
+                        "maxOutputTokens={}, responseLength={}", maxOutputTokens, result == null ? 0 : result.length());
+            }
 
             if (result == null || result.isBlank()) {
                 throw new RuntimeException("Resposta vazia do Gemini");

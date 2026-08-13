@@ -3,6 +3,7 @@ package com.br.criarcenariotestes.business.service;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.fallback.CenarioFallbackFactory;
+import com.br.criarcenariotestes.business.validation.ValidacaoEstruturalException;
 import com.br.criarcenariotestes.business.workflow.QaWorkflowService;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -107,6 +109,25 @@ class CenarioServiceTest {
         verify(qaWorkflowService, times(1)).executarWorkflow(any());
         verify(fallbackFactory, times(1)).criar(request);
         verify(cenarioRepository, times(1)).save(any(Cenario.class));
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003A: NÃO deve aplicar fallback quando o workflow falhar por validação estrutural (evitar falso sucesso)")
+    void naoDeveAplicarFallbackQuandoWorkflowFalharPorValidacaoEstrutural() {
+        // Arrange - reproduz o caso real: geração passou pelo Reviewer, mas a
+        // validação final (Dado/Quando/Resultado) detectou um cenário inválido.
+        // Antes desta correção, esse tipo de falha era mascarado pelo fallback
+        // genérico, retornando "sucesso" com cenários fabricados/irrelevantes.
+        when(qaWorkflowService.executarWorkflow(any()))
+                .thenThrow(new ValidacaoEstruturalException(
+                        "Validação final antes da persistência falhou: cenário sem estrutura BDD mínima."));
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.gerarCenarioCompleto(request))
+                .isInstanceOf(ValidacaoEstruturalException.class);
+
+        verify(fallbackFactory, never()).criar(any());
+        verify(cenarioRepository, never()).save(any(Cenario.class));
     }
 
     @Test

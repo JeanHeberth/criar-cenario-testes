@@ -4,6 +4,7 @@ import com.br.criarcenariotestes.business.agent.*;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.service.AgentLoaderService;
+import com.br.criarcenariotestes.business.validation.GeneratedScenariosValidator;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import com.br.criarcenariotestes.infrastructure.repository.CenarioRepository;
@@ -12,7 +13,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -57,13 +57,25 @@ class QaWorkflowServiceTest {
     @Mock
     private CenarioRepository cenarioRepository;
 
-    @InjectMocks
     private QaWorkflowService service;
 
     private CenarioRequest request;
 
     @BeforeEach
     void setUp() {
+        service = new QaWorkflowService(
+                requirementAnalysisAgent,
+                transcriptAnalysisAgent,
+                testPlanAgent,
+                testScenarioAgent,
+                redundancyReviewAgent,
+                bddFormatterAgent,
+                zephyrFormatterAgent,
+                agentLoaderService,
+                cenarioRepository,
+                new GeneratedScenariosValidator()
+        );
+
         request = new CenarioRequest(
                 "Login OAuth",
                 "Sistema de login",
@@ -72,7 +84,7 @@ class QaWorkflowServiceTest {
 
         when(agentLoaderService.loadAgentInstructions(anyString()))
                 .thenReturn("Instruções do agente");
-        
+
         when(requirementAnalysisAgent.getNome()).thenReturn("Requirement Analyst");
         when(transcriptAnalysisAgent.getNome()).thenReturn("Transcript Analyst");
         when(testPlanAgent.getNome()).thenReturn("Test Planning Agent");
@@ -87,6 +99,7 @@ class QaWorkflowServiceTest {
     void deveExecutarWorkflowCompleto() {
         // Arrange
         mockAgentesHabilitados();
+        mockCenariosValidos();
         mockCenarioSalvo();
 
         // Act
@@ -113,6 +126,7 @@ class QaWorkflowServiceTest {
         mockAgentesHabilitados();
         when(transcriptAnalysisAgent.isEnabled(any())).thenReturn(false);
         when(redundancyReviewAgent.isEnabled(any())).thenReturn(false);
+        mockCenariosValidos();
         mockCenarioSalvo();
 
         // Act
@@ -135,6 +149,7 @@ class QaWorkflowServiceTest {
     void deveExecutarWorkflowRevisao() {
         // Arrange
         mockAgentesHabilitados();
+        mockCenariosValidos();
         mockCenarioSalvo();
 
         // Act
@@ -157,6 +172,7 @@ class QaWorkflowServiceTest {
     void deveUsarWorkflowTypeDoRequest() {
         // Arrange
         mockAgentesHabilitados();
+        mockCenariosValidos();
         mockCenarioSalvo();
 
         // Act
@@ -186,6 +202,7 @@ class QaWorkflowServiceTest {
     void deveCarregarInstrucoesDoAgente() {
         // Arrange
         mockAgentesHabilitados();
+        mockCenariosValidos();
         mockCenarioSalvo();
 
         // Act
@@ -206,6 +223,8 @@ class QaWorkflowServiceTest {
             WorkflowContext ctx = invocation.getArgument(0);
             CenarioItem item = new CenarioItem();
             item.setNome("CT001");
+            item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas");
+            item.setResultadoEsperado("Então o login é realizado com sucesso");
             ctx.setCenarios(List.of(item));
             ctx.setCriteriosAceitacao("Critérios definidos");
             return null;
@@ -233,6 +252,74 @@ class QaWorkflowServiceTest {
         assertThat(response.titulo()).isEqualTo("Login OAuth");
     }
 
+    // ===== FASE15-BUG-003A: validação final antes da persistência =====
+
+    @Test
+    @DisplayName("FASE15-BUG-003A: não deve persistir quando o cenário final tiver Passos vazio")
+    void naoDevePersistirQuandoCenarioFinalTiverPassosVazio() {
+        // Arrange
+        mockAgentesHabilitados();
+        doAnswer(invocation -> {
+            WorkflowContext ctx = invocation.getArgument(0);
+            CenarioItem item = new CenarioItem();
+            item.setNome("Login com credenciais válidas");
+            item.setScriptTeste("");
+            item.setResultadoEsperado("Então o login é realizado com sucesso");
+            ctx.setCenarios(List.of(item));
+            return null;
+        }).when(testScenarioAgent).executar(any());
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.executarWorkflow(request, WorkflowType.COMPLETO))
+                .isInstanceOf(RuntimeException.class);
+
+        verify(cenarioRepository, never()).save(any(Cenario.class));
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003A: não deve persistir quando o cenário final tiver Resultado Esperado vazio")
+    void naoDevePersistirQuandoCenarioFinalTiverResultadoEsperadoVazio() {
+        // Arrange
+        mockAgentesHabilitados();
+        doAnswer(invocation -> {
+            WorkflowContext ctx = invocation.getArgument(0);
+            CenarioItem item = new CenarioItem();
+            item.setNome("Login com credenciais válidas");
+            item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas");
+            item.setResultadoEsperado("");
+            ctx.setCenarios(List.of(item));
+            return null;
+        }).when(testScenarioAgent).executar(any());
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.executarWorkflow(request, WorkflowType.COMPLETO))
+                .isInstanceOf(RuntimeException.class);
+
+        verify(cenarioRepository, never()).save(any(Cenario.class));
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003A: não deve persistir quando o cenário final não tiver estrutura BDD mínima (Dado/Quando)")
+    void naoDevePersistirQuandoCenarioFinalNaoTiverEstruturaBdd() {
+        // Arrange
+        mockAgentesHabilitados();
+        doAnswer(invocation -> {
+            WorkflowContext ctx = invocation.getArgument(0);
+            CenarioItem item = new CenarioItem();
+            item.setNome("Login com credenciais válidas");
+            item.setScriptTeste("O usuário acessa a tela e informa os dados"); // sem Dado/Quando
+            item.setResultadoEsperado("Então o login é realizado com sucesso");
+            ctx.setCenarios(List.of(item));
+            return null;
+        }).when(testScenarioAgent).executar(any());
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.executarWorkflow(request, WorkflowType.COMPLETO))
+                .isInstanceOf(RuntimeException.class);
+
+        verify(cenarioRepository, never()).save(any(Cenario.class));
+    }
+
     private void mockAgentesHabilitados() {
         when(requirementAnalysisAgent.isEnabled(any())).thenReturn(true);
         when(transcriptAnalysisAgent.isEnabled(any())).thenReturn(true);
@@ -241,6 +328,28 @@ class QaWorkflowServiceTest {
         when(redundancyReviewAgent.isEnabled(any())).thenReturn(true);
         when(bddFormatterAgent.isEnabled(any())).thenReturn(true);
         when(zephyrFormatterAgent.isEnabled(any())).thenReturn(true);
+    }
+
+    private CenarioItem cenarioBddValido() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com credenciais válidas");
+        item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas");
+        item.setResultadoEsperado("Então o login é realizado com sucesso");
+        return item;
+    }
+
+    private void mockCenariosValidos() {
+        doAnswer(invocation -> {
+            WorkflowContext ctx = invocation.getArgument(0);
+            ctx.setCenarios(List.of(cenarioBddValido()));
+            return null;
+        }).when(testScenarioAgent).executar(any());
+
+        doAnswer(invocation -> {
+            WorkflowContext ctx = invocation.getArgument(0);
+            ctx.setCenariosRevisados(List.of(cenarioBddValido()));
+            return null;
+        }).when(redundancyReviewAgent).executar(any());
     }
 
     private void mockCenarioSalvo() {

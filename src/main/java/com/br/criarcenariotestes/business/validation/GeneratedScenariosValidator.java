@@ -20,12 +20,15 @@ public class GeneratedScenariosValidator {
     );
 
     /**
-     * FASE15-BUG-003: keyword BDD só conta quando inicia um passo — no começo
-     * do texto, logo após uma quebra de linha, ou logo após pontuação de fim
-     * de frase (". "/"; "/": "). Isso evita falso positivo com a palavra no
-     * meio de uma frase (ex.: "o sistema bloqueia quando ocorrer...").
+     * FASE15-BUG-003/FASE15-BUG-003A: keyword BDD só conta quando inicia um
+     * passo — no começo do texto, logo após uma quebra de linha, ou logo após
+     * pontuação de fim de frase/fechamento de parêntese (". "/"; "/": "/") ").
+     * Isso evita falso positivo com a palavra no meio de uma frase (ex.: "o
+     * sistema bloqueia quando ocorrer..."). A proteção real contra falso
+     * positivo é a keyword exigir inicial maiúscula com `\b` — "quando(" em
+     * minúsculo colado a um parêntese (ex.: chamada de função) nunca casa.
      */
-    private static final String INICIO_DE_PASSO = "(?:^|\\n|(?<=[.;:])\\s+)";
+    private static final String INICIO_DE_PASSO = "(?:^|\\n|(?<=[.;:)])\\s+)";
     private static final Pattern KEYWORD_DADO =
             Pattern.compile(INICIO_DE_PASSO + "(?:Dado que|Dado)\\b");
     private static final Pattern KEYWORD_QUANDO =
@@ -95,6 +98,51 @@ public class GeneratedScenariosValidator {
         return ValidationResult.invalido(String.format(
                 "estrutura BDD ausente ou incompleta (Dado=%s, Quando=%s, Então=%s).",
                 temDado, temQuando, temEntao));
+    }
+
+    /**
+     * FASE15-BUG-003A: validação determinística executada imediatamente antes
+     * da persistência, sobre a representação FINAL do cenário (já processada
+     * pelo BddFormatterAgent). Diferente de {@link #validarEstruturaBdd}, não
+     * exige "Então" literalmente em Passos — nessa etapa o Formatter já deve
+     * ter movido esse conteúdo para Resultado Esperado; exige apenas que o
+     * campo não esteja vazio.
+     */
+    public ValidationResult validarRepresentacaoFinal(CenarioItem item) {
+        if (item == null || !temTexto(item.getNome())) {
+            return ValidationResult.invalido("Cenário sem nome/título válido.");
+        }
+        if (!temTexto(item.getScriptTeste())) {
+            return ValidationResult.invalido("Cenário '" + item.getNome() + "' com Passos vazio.");
+        }
+        if (!temTexto(item.getResultadoEsperado())) {
+            return ValidationResult.invalido("Cenário '" + item.getNome() + "' com Resultado Esperado vazio.");
+        }
+
+        boolean temDado = KEYWORD_DADO.matcher(item.getScriptTeste()).find();
+        boolean temQuando = KEYWORD_QUANDO.matcher(item.getScriptTeste()).find();
+
+        if (!temDado || !temQuando) {
+            return ValidationResult.invalido(String.format(
+                    "Cenário '%s' sem estrutura BDD mínima nos Passos (Dado=%s, Quando=%s).",
+                    item.getNome(), temDado, temQuando));
+        }
+
+        return ValidationResult.ok();
+    }
+
+    /**
+     * FASE15-BUG-003A: identifica, de forma puramente estrutural (sem
+     * blacklist de nomes/palavras), um item pós-Reviewer que não é um
+     * cenário real — apenas conteúdo editorial/comentário (ex.: "Observações
+     * de otimização:") que não deveria ter sido tratado como CenarioItem.
+     * Critério: nenhum conteúdo real em Passos NEM em Resultado Esperado,
+     * independentemente do que está no nome.
+     */
+    public boolean pareceConteudoNaoCenario(CenarioItem item) {
+        return item != null
+                && !temTexto(item.getScriptTeste())
+                && !temTexto(item.getResultadoEsperado());
     }
 
     private boolean temTexto(String valor) {
