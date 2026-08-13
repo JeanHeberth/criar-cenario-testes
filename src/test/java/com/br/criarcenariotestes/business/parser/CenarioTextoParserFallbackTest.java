@@ -253,4 +253,33 @@ class CenarioTextoParserFallbackTest {
         assertEquals("Cenário 1", cenarios.get(0).getNome());
         assertEquals("Cenário 2", cenarios.get(1).getNome());
     }
+
+    @Test
+    void naoDeveTransformarBlocoDeObservacoesFinaisDoReviewerEmCenario() {
+        // FASE15-BUG-003A (Fase 15, Sessão 5): reproduz o padrão real observado
+        // em produção — o Reviewer às vezes anexa um bloco de observações/notas
+        // finais depois dos cenários reais. Esse bloco não tem nenhum campo
+        // real preenchido, mas o parser aceitava-o como cenário porque o
+        // fallback de "primeira linha" preenchia `nome` ANTES do guard de
+        // bloco vazio ser avaliado (nome deixava de estar em branco e o guard
+        // `if (nome.isBlank() && objetivo.isBlank() && ...)` nunca disparava).
+        String respostaComObservacoesFinais = """
+                ---
+                Nome: Login válido
+                Objetivo: Validar login
+                Passos:
+                Dado que o usuário está na tela de login
+                Quando ele informa credenciais válidas
+                Então o login é realizado com sucesso
+                Resultado esperado: Login realizado
+                ---
+                Observações de otimização:
+                Consolidamos os passos e resultado esperado dos cenários acima removendo redundâncias, mantendo a cobertura original.
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(respostaComObservacoesFinais);
+
+        assertEquals(1, cenarios.size(), "O bloco de observações finais não deve virar um cenário");
+        assertEquals("Login válido", cenarios.get(0).getNome());
+    }
 }

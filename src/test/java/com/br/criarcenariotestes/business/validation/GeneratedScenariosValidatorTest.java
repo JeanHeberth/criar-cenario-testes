@@ -237,4 +237,122 @@ class GeneratedScenariosValidatorTest {
 
         assertThat(resultado.valido()).isFalse();
     }
+
+    // ===== FASE15-BUG-003A: fronteira ") Quando" e validação final pós-Formatter =====
+
+    @Test
+    @DisplayName("validarEstruturaBdd: 'Quando' após fechamento de parêntese deve ser reconhecido como novo passo (caso real da Sessão 5)")
+    void validarEstruturaBddDeveReconhecerQuandoAposParenteseFechado() {
+        // Reproduz o padrão real: "Quando" ficou colado ao parêntese do Dado
+        // (sem quebra de linha), mas "Então" continua isolado em sua própria
+        // linha — exatamente o padrão observado no cenário 12 da Sessão 5.
+        String passos = "Dado que o usuário realiza tentativas de login e validação 2FA "
+                + "(incluindo tentativas inválidas) Quando ocorre qualquer erro ou rejeição de login\n"
+                + "Então os logs do sistema não contêm informações sensíveis";
+
+        GeneratedScenariosValidator.ValidationResult resultado = validator.validarEstruturaBdd(passos);
+
+        assertThat(resultado.valido()).isTrue();
+    }
+
+    @Test
+    @DisplayName("validarEstruturaBdd: 'quando' minúsculo colado a parêntese (ex.: chamada de função) não deve ser tratado como keyword BDD")
+    void validarEstruturaBddNaoDeveReconhecerQuandoMinusculoColadoAParentese() {
+        String passos = "Dado que o sistema chama a função quando(condicao) e retorna o valor esperado";
+
+        GeneratedScenariosValidator.ValidationResult resultado = validator.validarEstruturaBdd(passos);
+
+        // Sem "Quando" (maiúsculo, delimitado) e sem "Então" -> continua INVALID,
+        // mas o importante aqui é que o falso "quando(" não conte como o Quando exigido.
+        assertThat(resultado.valido()).isFalse();
+        assertThat(resultado.motivo()).contains("Quando=false");
+    }
+
+    @Test
+    @DisplayName("validarRepresentacaoFinal: cenário completo pós-Formatter (Então já movido para Resultado Esperado) deve ser VALID")
+    void validarRepresentacaoFinalDeveAceitarCenarioCompletoPosFormatter() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com credenciais válidas");
+        item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas");
+        item.setResultadoEsperado("Então o login é realizado com sucesso");
+
+        GeneratedScenariosValidator.ValidationResult resultado = validator.validarRepresentacaoFinal(item);
+
+        assertThat(resultado.valido()).isTrue();
+    }
+
+    @Test
+    @DisplayName("validarRepresentacaoFinal: deve rejeitar cenário com Passos vazio")
+    void validarRepresentacaoFinalDeveRejeitarPassosVazio() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com credenciais válidas");
+        item.setScriptTeste("");
+        item.setResultadoEsperado("Então o login é realizado com sucesso");
+
+        GeneratedScenariosValidator.ValidationResult resultado = validator.validarRepresentacaoFinal(item);
+
+        assertThat(resultado.valido()).isFalse();
+    }
+
+    @Test
+    @DisplayName("validarRepresentacaoFinal: deve rejeitar cenário com Resultado Esperado vazio")
+    void validarRepresentacaoFinalDeveRejeitarResultadoEsperadoVazio() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com credenciais válidas");
+        item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas");
+        item.setResultadoEsperado("");
+
+        GeneratedScenariosValidator.ValidationResult resultado = validator.validarRepresentacaoFinal(item);
+
+        assertThat(resultado.valido()).isFalse();
+    }
+
+    @Test
+    @DisplayName("validarRepresentacaoFinal: deve rejeitar cenário sem nome")
+    void validarRepresentacaoFinalDeveRejeitarSemNome() {
+        CenarioItem item = new CenarioItem();
+        item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas");
+        item.setResultadoEsperado("Então o login é realizado com sucesso");
+
+        GeneratedScenariosValidator.ValidationResult resultado = validator.validarRepresentacaoFinal(item);
+
+        assertThat(resultado.valido()).isFalse();
+    }
+
+    @Test
+    @DisplayName("validarRepresentacaoFinal: deve rejeitar cenário sem Dado ou sem Quando nos Passos")
+    void validarRepresentacaoFinalDeveRejeitarSemDadoOuQuando() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com credenciais válidas");
+        item.setScriptTeste("O usuário acessa a tela e informa os dados"); // sem Dado/Quando
+        item.setResultadoEsperado("Então o login é realizado com sucesso");
+
+        GeneratedScenariosValidator.ValidationResult resultado = validator.validarRepresentacaoFinal(item);
+
+        assertThat(resultado.valido()).isFalse();
+    }
+
+    // ===== FASE15-BUG-003A: item pós-Reviewer que não é um cenário real =====
+
+    @Test
+    @DisplayName("pareceConteudoNaoCenario: item com Passos e Resultado Esperado vazios deve ser identificado como conteúdo não-cenário")
+    void pareceConteudoNaoCenarioDeveIdentificarItemTotalmenteVazio() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Observações de otimização:");
+        item.setScriptTeste("");
+        item.setResultadoEsperado("");
+
+        assertThat(validator.pareceConteudoNaoCenario(item)).isTrue();
+    }
+
+    @Test
+    @DisplayName("pareceConteudoNaoCenario: item com conteúdo real em Passos NÃO deve ser identificado como não-cenário, mesmo com nome incomum")
+    void pareceConteudoNaoCenarioNaoDeveDescartarCenarioRealComNomeIncomum() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Resumo do fluxo de login");
+        item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas");
+        item.setResultadoEsperado("Então o login é realizado com sucesso");
+
+        assertThat(validator.pareceConteudoNaoCenario(item)).isFalse();
+    }
 }

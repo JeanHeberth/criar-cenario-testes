@@ -4,6 +4,7 @@ import com.br.criarcenariotestes.business.ai.AiProvider;
 import com.br.criarcenariotestes.business.ai.AiProviderResolver;
 import com.br.criarcenariotestes.business.parser.CenarioTextoParser;
 import com.br.criarcenariotestes.business.validation.GeneratedScenariosValidator;
+import com.br.criarcenariotestes.business.validation.ValidacaoEstruturalException;
 import com.br.criarcenariotestes.business.workflow.WorkflowContext;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,15 @@ public class TestScenarioAgent implements BaseAgent {
 
     private static final Logger log = LoggerFactory.getLogger(TestScenarioAgent.class);
 
+    /**
+     * FASE15-BUG-006: o gerador produz tipicamente 17-19 cenários em BDD
+     * completo (mais verboso que o antigo formato numerado), o que esbarrava
+     * no limite padrão de 4000 tokens de saída e truncava a resposta no meio
+     * do último cenário. Só este agente usa um teto maior — os demais
+     * continuam com o limite configurado padrão (4000).
+     */
+    public static final int GENERATOR_MAX_TOKENS = 8000;
+
     private final AiProviderResolver aiProviderResolver;
     private final CenarioTextoParser cenarioTextoParser;
     private final GeneratedScenariosValidator generatedScenariosValidator;
@@ -33,7 +43,7 @@ public class TestScenarioAgent implements BaseAgent {
         try {
             AiProvider provider = aiProviderResolver.getActiveProvider();
 
-            String respostaIa = provider.gerarResposta(systemPrompt, userPrompt);
+            String respostaIa = provider.gerarResposta(systemPrompt, userPrompt, GENERATOR_MAX_TOKENS);
             List<CenarioItem> cenarios = cenarioTextoParser.parsear(respostaIa);
             GeneratedScenariosValidator.ValidationResult validacao =
                     generatedScenariosValidator.validarGeracao(respostaIa, cenarios);
@@ -43,15 +53,15 @@ public class TestScenarioAgent implements BaseAgent {
                         validacao.motivo());
 
                 String retryUserPrompt = buildRetryUserPrompt(userPrompt);
-                respostaIa = provider.gerarResposta(systemPrompt, retryUserPrompt);
+                respostaIa = provider.gerarResposta(systemPrompt, retryUserPrompt, GENERATOR_MAX_TOKENS);
                 cenarios = cenarioTextoParser.parsear(respostaIa);
                 validacao = generatedScenariosValidator.validarGeracao(respostaIa, cenarios);
 
                 if (!validacao.valido()) {
                     log.error("Falha na geração de cenários mesmo após retry único. motivo='{}'",
                             validacao.motivo());
-                    throw new IllegalStateException(
-                            "Resposta da IA inválida após retry: " + validacao.motivo());
+                    throw new ValidacaoEstruturalException(
+                            "Falha na geração de cenários: resposta da IA inválida após retry - " + validacao.motivo());
                 }
             }
 
@@ -65,6 +75,10 @@ public class TestScenarioAgent implements BaseAgent {
             log.info("Cenários gerados com sucesso. provider='{}', quantidade={}",
                 provider.getName(), cenarios.size());
 
+        } catch (ValidacaoEstruturalException e) {
+            // FASE15-BUG-003A: não reenvelopar - precisa propagar identificável
+            // como falha estrutural (nunca deve ser mascarada por fallback).
+            throw e;
         } catch (Exception e) {
             log.error("Erro ao gerar cenários: {}", e.getMessage(), e);
             throw new RuntimeException("Falha na geração de cenários", e);

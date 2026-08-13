@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -101,7 +102,8 @@ class QaWorkflowServiceBug002RegressionTest {
                 bddFormatterAgent,
                 zephyrFormatterAgent,
                 agentLoaderService,
-                cenarioRepository
+                cenarioRepository,
+                validator
         );
 
         when(agentLoaderService.loadAgentInstructions(anyString())).thenReturn("");
@@ -125,7 +127,8 @@ class QaWorkflowServiceBug002RegressionTest {
                 """;
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
-        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(planoDeGeracao);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS)))
+                .thenReturn(planoDeGeracao);
 
         CenarioRequest request = new CenarioRequest(
                 "Login com bloqueio por tentativas inválidas e autenticação em dois fatores",
@@ -134,12 +137,14 @@ class QaWorkflowServiceBug002RegressionTest {
         );
 
         // Act & Assert - o workflow deve falhar de forma explícita, não reportar sucesso.
+        // FASE15-BUG-003A: a exceção agora é uma ValidacaoEstruturalException propagada
+        // sem reenvelopamento (para nunca ser mascarada pelo fallback do CenarioService).
         assertThatThrownBy(() -> service.executarWorkflow(request, WorkflowType.COMPLETO))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Test Scenario Generator");
+                .hasMessageContaining("Falha na geração de cenários");
 
         // Exatamente 1 retry (2 chamadas ao provider), nunca um loop sem fim.
-        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString());
+        verify(aiProvider, times(2)).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
 
         // O Reviewer NUNCA deve receber uma geração inválida.
         verify(redundancyReviewAgentSpy, never()).executar(any());
