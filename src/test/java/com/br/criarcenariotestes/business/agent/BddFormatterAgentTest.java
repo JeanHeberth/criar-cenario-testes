@@ -221,6 +221,75 @@ class BddFormatterAgentTest {
     }
 
     @Test
+    void deveRemoverDuplicacaoExataDoResultadoEsperadoNoFinalDosPassos() {
+        // Arrange - FASE15-BUG-003A: reproduz o padrão real observado na Sessão 5
+        // (cenários 1, 5 e 7 do reteste): a conclusão do "Então" fica corretamente
+        // no passo, mas o mesmo texto do Resultado Esperado é colado de novo,
+        // sem separador, logo em seguida.
+        CenarioItem item = new CenarioItem();
+        item.setNome("Tentativa de login com conta inativa");
+        item.setScriptTeste(
+                "Dado que o usuário está na tela de login\n"
+                        + "E possui conta marcada como inativa\n"
+                        + "Quando preenche o campo de e-mail e senha corretamente\n"
+                        + "E clica em \"Entrar\" Então o sistema exibe uma mensagem específica de conta inativa "
+                        + "Login rejeitado e mensagem específica de conta inativa exibida ao usuário.");
+        item.setResultadoEsperado("Login rejeitado e mensagem específica de conta inativa exibida ao usuário.");
+
+        List<CenarioItem> cenarios = new ArrayList<>();
+        cenarios.add(item);
+        context.setCenarios(cenarios);
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        CenarioItem resultado = context.getCenarios().get(0);
+        long ocorrencias = countOcorrencias(resultado.getScriptTeste(),
+                "Login rejeitado e mensagem específica de conta inativa exibida ao usuário.");
+
+        assertEquals(0, ocorrencias,
+                "O texto do Resultado Esperado não deve mais aparecer (duplicado) dentro dos Passos");
+        assertTrue(resultado.getScriptTeste().contains("Então o sistema exibe uma mensagem específica de conta inativa"),
+                "O passo 'Então' original não deve ser removido, só a duplicação");
+        assertEquals("Login rejeitado e mensagem específica de conta inativa exibida ao usuário.",
+                resultado.getResultadoEsperado());
+    }
+
+    @Test
+    void naoDeveRemoverTextoQuandoScriptTesteEIgualAoResultadoEsperadoInteiro() {
+        // Arrange - caso de borda: não deduplicar se isso apagaria o passo inteiro
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário de borda");
+        item.setScriptTeste("Login rejeitado.");
+        item.setResultadoEsperado("Login rejeitado.");
+
+        List<CenarioItem> cenarios = new ArrayList<>();
+        cenarios.add(item);
+        context.setCenarios(cenarios);
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        CenarioItem resultado = context.getCenarios().get(0);
+        assertFalse(resultado.getScriptTeste().isBlank());
+    }
+
+    private long countOcorrencias(String texto, String trecho) {
+        if (texto == null || trecho == null || trecho.isEmpty()) {
+            return 0;
+        }
+        long count = 0;
+        int idx = 0;
+        while ((idx = texto.indexOf(trecho, idx)) != -1) {
+            count++;
+            idx += trecho.length();
+        }
+        return count;
+    }
+
+    @Test
     void deveManterCamposVaziosQuandoSemTextoBdd() {
         // Arrange
         CenarioItem item = new CenarioItem();

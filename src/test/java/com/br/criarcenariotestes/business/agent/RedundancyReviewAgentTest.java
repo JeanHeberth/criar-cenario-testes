@@ -67,6 +67,10 @@ class RedundancyReviewAgentTest {
         // Arrange
         CenarioItem cenarioOtimizado = new CenarioItem();
         cenarioOtimizado.setNome("Login com credenciais válidas [email/senha]");
+        cenarioOtimizado.setScriptTeste(
+                "Dado que o usuário está na tela de login\n"
+                        + "Quando ele informa e-mail e senha válidos\n"
+                        + "Então o login é realizado com sucesso");
 
         when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
         when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn("---\nNome: CT001\n---");
@@ -261,5 +265,69 @@ class RedundancyReviewAgentTest {
                 .doesNotContain("Usuário autenticado e redirecionado para a página inicial");
         assertThat(revisado.getResultadoEsperado())
                 .isEqualTo("Usuário autenticado e redirecionado para a página inicial");
+    }
+
+    // ===== FASE15-BUG-003A: validação pós-Reviewer =====
+
+    @Test
+    @DisplayName("FASE15-BUG-003A: item editorial pós-revisão (ex.: 'Observações de otimização') deve ser descartado sem invalidar os cenários reais")
+    void deveDescartarItemEditorialSemInvalidarCenariosReais() {
+        // Arrange
+        CenarioItem cenarioValido1 = new CenarioItem();
+        cenarioValido1.setNome("Login com credenciais válidas");
+        cenarioValido1.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado");
+
+        CenarioItem cenarioValido2 = new CenarioItem();
+        cenarioValido2.setNome("Login com e-mail inexistente");
+        cenarioValido2.setScriptTeste("Dado que o e-mail não existe\nQuando o usuário tenta logar\nEntão a mensagem genérica é exibida");
+
+        CenarioItem itemEditorial = new CenarioItem();
+        itemEditorial.setNome("Observações de otimização:");
+        itemEditorial.setScriptTeste("");
+        itemEditorial.setResultadoEsperado("");
+
+        String respostaRevisada = "---\n(resposta com 2 cenários válidos + observações finais)\n---";
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada))
+                .thenReturn(List.of(cenarioValido1, cenarioValido2, itemEditorial));
+
+        // Act
+        agent.executar(context);
+
+        // Assert - só os 2 cenários reais permanecem; nada foi fail-closed
+        assertThat(context.getCenariosRevisados()).hasSize(2);
+        assertThat(context.getCenariosRevisados())
+                .extracting(CenarioItem::getNome)
+                .containsExactly("Login com credenciais válidas", "Login com e-mail inexistente");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003A: cenário real estruturalmente corrompido (com conteúdo, mas sem Quando) deve fail closed a revisão inteira")
+    void deveFailClosedQuandoCenarioRealVierCorrompido() {
+        // Arrange
+        CenarioItem cenarioValido = new CenarioItem();
+        cenarioValido.setNome("Login com credenciais válidas");
+        cenarioValido.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado");
+
+        CenarioItem cenarioCorrompido = new CenarioItem();
+        cenarioCorrompido.setNome("Login bloqueado");
+        // tem conteúdo real, mas falta "Quando" -> não é conteúdo editorial, é um
+        // cenário real corrompido
+        cenarioCorrompido.setScriptTeste("Dado usuário com três tentativas inválidas\nEntão a conta é bloqueada");
+
+        String respostaRevisada = "---\n(resposta com 1 cenário válido + 1 corrompido)\n---";
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada))
+                .thenReturn(List.of(cenarioValido, cenarioCorrompido));
+
+        // Act
+        agent.executar(context);
+
+        // Assert - fail closed: mantém os cenários ORIGINAIS (pré-revisão), não os revisados
+        assertThat(context.getCenariosRevisados()).isEqualTo(context.getCenarios());
     }
 }

@@ -8,6 +8,7 @@ import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.fallback.CenarioFallbackFactory;
 import com.br.criarcenariotestes.business.parser.CenarioTextoParser;
 import com.br.criarcenariotestes.business.prompt.PromptFactory;
+import com.br.criarcenariotestes.business.validation.ValidacaoEstruturalException;
 import com.br.criarcenariotestes.business.workflow.QaWorkflowService;
 import com.br.criarcenariotestes.business.workflow.WorkflowType;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
@@ -47,6 +48,14 @@ public class CenarioService {
 
         try {
             return qaWorkflowService.executarWorkflow(request);
+        } catch (ValidacaoEstruturalException e) {
+            // FASE15-BUG-003A: falha estrutural determinística NUNCA deve ser
+            // mascarada pelo fallback local (isso seria reportar falso
+            // sucesso com conteúdo genérico/irrelevante). Propaga como falha real.
+            log.error("Workflow BMAD falhou por validação estrutural (FASE15-BUG-003A). " +
+                    "NÃO aplicando fallback local. titulo='{}', agent='{}', erro='{}'",
+                    request.titulo(), request.agent(), e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.warn("Workflow BMAD falhou. titulo='{}', agent='{}', erro='{}'",
                     request.titulo(), request.agent(), e.getMessage(), e);
@@ -54,7 +63,7 @@ public class CenarioService {
             return salvarFallback(request);
         }
     }
-    
+
     @Deprecated
     public CenarioResponse gerarCenarioCompletoLegacy(CenarioRequest request) {
         String systemPrompt = buildSystemPrompt(request.agent());
@@ -227,6 +236,12 @@ public class CenarioService {
 
         try {
             return qaWorkflowService.executarWorkflow(request);
+        } catch (ValidacaoEstruturalException e) {
+            // FASE15-BUG-003A: mesma proteção contra falso sucesso do fluxo sem PDF.
+            log.error("Workflow BMAD com PDF falhou por validação estrutural (FASE15-BUG-003A). " +
+                    "NÃO aplicando fallback local. titulo='{}', agent='{}', erro='{}'",
+                    titulo, agent, e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.warn("Workflow BMAD com PDF falhou. titulo='{}', agent='{}', erro='{}'",
                     titulo, agent, e.getMessage(), e);

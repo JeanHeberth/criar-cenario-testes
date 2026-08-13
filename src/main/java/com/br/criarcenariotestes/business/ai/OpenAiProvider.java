@@ -32,18 +32,29 @@ public class OpenAiProvider implements AiProvider {
 
     @Override
     public String gerarResposta(String systemPrompt, String userPrompt) {
+        return gerarResposta(systemPrompt, userPrompt, null);
+    }
+
+    @Override
+    public String gerarResposta(String systemPrompt, String userPrompt, Integer maxTokensOverride) {
         return gerarRespostaComHistorico(systemPrompt,
-                List.of(Map.of("role", "user", "content", userPrompt)));
+                List.of(Map.of("role", "user", "content", userPrompt)), maxTokensOverride);
     }
 
     @Override
     public String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history) {
+        return gerarRespostaComHistorico(systemPrompt, history, null);
+    }
+
+    private String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history, Integer maxTokensOverride) {
         validarConfiguracao();
+
+        int maxTokens = maxTokensOverride != null ? maxTokensOverride : properties.getMaxTokens();
 
         log.info("OpenAI request. model='{}', url='{}', maxTokens={}, systemPromptLength={}, historySize={}",
                 properties.getModel(),
                 properties.getUrl(),
-                properties.getMaxTokens(),
+                maxTokens,
                 systemPrompt == null ? 0 : systemPrompt.length(),
                 history == null ? 0 : history.size());
 
@@ -66,7 +77,7 @@ public class OpenAiProvider implements AiProvider {
         requestBody.put("messages", messages);
         requestBody.put("temperature", 0.7);
         // Evita truncar resposta e perder cenarios na saida.
-        requestBody.put("max_tokens", properties.getMaxTokens());
+        requestBody.put("max_tokens", maxTokens);
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
@@ -75,16 +86,27 @@ public class OpenAiProvider implements AiProvider {
             log.info("✅ OpenAI status: {}", response.getStatusCode());
 
             JsonNode root = mapper.readTree(response.getBody());
-            String result = root.path("choices")
-                    .get(0)
+            JsonNode primeiraEscolha = root.path("choices").get(0);
+            String result = primeiraEscolha
                     .path("message")
                     .path("content")
                     .asText();
+            // FASE15-BUG-006: finish_reason == "length" indica que a resposta foi
+            // cortada pelo limite de tokens de saída, não que o modelo concluiu
+            // naturalmente. Apenas observabilidade - não substitui a validação
+            // estrutural existente (GeneratedScenariosValidator continua obrigatório).
+            String finishReason = primeiraEscolha.path("finish_reason").asText(null);
 
-            log.info("OpenAI response recebida. model='{}', responseLength={}, preview='{}'",
+            log.info("OpenAI response recebida. model='{}', responseLength={}, finishReason='{}', preview='{}'",
                     properties.getModel(),
                     result == null ? 0 : result.length(),
+                    finishReason,
                     gerarPreview(result));
+
+            if ("length".equals(finishReason)) {
+                log.warn("OpenAI truncou a resposta pelo limite de tokens de saída (finish_reason='length'). " +
+                        "maxTokens={}, responseLength={}", maxTokens, result == null ? 0 : result.length());
+            }
 
             if (result == null || result.isBlank()) {
                 throw new RuntimeException("Resposta vazia da OpenAI");

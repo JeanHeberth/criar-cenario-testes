@@ -4,7 +4,10 @@ import com.br.criarcenariotestes.business.agent.*;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
 import com.br.criarcenariotestes.business.dto.CenarioResponse;
 import com.br.criarcenariotestes.business.service.AgentLoaderService;
+import com.br.criarcenariotestes.business.validation.GeneratedScenariosValidator;
+import com.br.criarcenariotestes.business.validation.ValidacaoEstruturalException;
 import com.br.criarcenariotestes.infrastructure.entity.Cenario;
+import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import com.br.criarcenariotestes.infrastructure.repository.CenarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -26,9 +29,10 @@ public class QaWorkflowService {
     private final RedundancyReviewAgent redundancyReviewAgent;
     private final BddFormatterAgent bddFormatterAgent;
     private final ZephyrFormatterAgent zephyrFormatterAgent;
-    
+
     private final AgentLoaderService agentLoaderService;
     private final CenarioRepository cenarioRepository;
+    private final GeneratedScenariosValidator generatedScenariosValidator;
 
     public CenarioResponse executarWorkflow(CenarioRequest request) {
         WorkflowType workflowType = request.workflowType() != null ? 
@@ -53,6 +57,11 @@ public class QaWorkflowService {
                     log.info("Executando agente: {}", agent.getNome());
                     agent.executar(context);
                     log.info("Agente {} concluído com sucesso", agent.getNome());
+                } catch (ValidacaoEstruturalException e) {
+                    // FASE15-BUG-003A: não reenvelopar - precisa propagar identificável
+                    // como falha estrutural (nunca deve ser mascarada por fallback).
+                    log.error("Falha estrutural no agente {}: {}", agent.getNome(), e.getMessage());
+                    throw e;
                 } catch (Exception e) {
                     log.error("Erro no agente {}: {}", agent.getNome(), e.getMessage(), e);
                     throw new RuntimeException("Falha no workflow no agente: " + agent.getNome(), e);
@@ -102,12 +111,15 @@ public class QaWorkflowService {
     }
 
     private CenarioResponse salvarResultado(WorkflowContext context) {
+        List<CenarioItem> cenariosFinais = context.getCenariosFinais();
+        validarCenariosFinaisAntesDePersistir(cenariosFinais);
+
         Cenario cenario = new Cenario();
         cenario.setTitulo(context.getRequest().titulo());
         cenario.setRegraDeNegocio(context.getRequest().regraDeNegocio());
         cenario.setCriteriosAceitacao(context.getCriteriosAceitacao());
-        cenario.setCenarios(context.getCenariosFinais());
-        
+        cenario.setCenarios(cenariosFinais);
+
         Cenario salvo = cenarioRepository.save(cenario);
         
         log.info("Workflow concluído e salvo. id='{}', cenarios={}, metadados={}", 
@@ -122,5 +134,25 @@ public class QaWorkflowService {
             salvo.getCriteriosAceitacao(),
             salvo.getCenarios()
         );
+    }
+
+    /**
+     * FASE15-BUG-003A: última barreira determinística antes da persistência.
+     * Nenhuma chamada de IA, nenhum retry — se algo estruturalmente inválido
+     * chegou até aqui (falha do Reviewer não capturada, item corrompido),
+     * falha explicitamente em vez de persistir e reportar falso sucesso.
+     */
+    private void validarCenariosFinaisAntesDePersistir(List<CenarioItem> cenarios) {
+        if (cenarios == null || cenarios.isEmpty()) {
+            throw new ValidacaoEstruturalException("Nenhum cenário válido para persistir.");
+        }
+
+        for (CenarioItem item : cenarios) {
+            GeneratedScenariosValidator.ValidationResult resultado =
+                    generatedScenariosValidator.validarRepresentacaoFinal(item);
+            if (!resultado.valido()) {
+                throw new ValidacaoEstruturalException("Validação final antes da persistência falhou: " + resultado.motivo());
+            }
+        }
     }
 }

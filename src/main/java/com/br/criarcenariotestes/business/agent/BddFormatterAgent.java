@@ -40,7 +40,7 @@ public class BddFormatterAgent implements BaseAgent {
             for (CenarioItem item : cenarios) {
                 formatarCenarioBdd(item);
             }
-            
+
             log.info("Formatação BDD concluída. cenarios={}", cenarios.size());
             
         } catch (Exception e) {
@@ -71,12 +71,63 @@ public class BddFormatterAgent implements BaseAgent {
         if (separacao.temPassos()) {
             item.setScriptTeste(separacao.getPassosFormatados());
         }
-        
+
         if (separacao.temResultados()) {
             item.setResultadoEsperado(separacao.getResultadosFormatados());
         }
+
+        removerDuplicacaoResultadoNoFinalDosPassos(item);
     }
-    
+
+    private static final Pattern PONTUACAO_FINAL = Pattern.compile("[.!?;:]+$");
+
+    /**
+     * FASE15-BUG-003A: remove, de forma determinística (sem NLP/semântica),
+     * uma repetição EXATA do texto de Resultado Esperado colada ao final de
+     * Passos (defeito residual observado na Sessão 5 — ex.: "...Então X. X.").
+     * Tolera apenas diferença de pontuação terminal/whitespace. Nunca remove
+     * se isso apagaria o passo inteiro (scriptTeste == resultadoEsperado).
+     * Loop defensivo cobre o caso de duplicação múltipla introduzida por este
+     * próprio agente ao recombinar script+resultado antes de re-separar.
+     */
+    private void removerDuplicacaoResultadoNoFinalDosPassos(CenarioItem item) {
+        String resultado = item.getResultadoEsperado();
+        String script = item.getScriptTeste();
+        if (resultado == null || resultado.isBlank() || script == null || script.isBlank()) {
+            return;
+        }
+
+        String resultadoNucleo = PONTUACAO_FINAL.matcher(resultado.trim()).replaceAll("");
+        if (resultadoNucleo.isBlank()) {
+            return;
+        }
+
+        Pattern duplicacaoNoFinal = Pattern.compile(
+                "\\s*" + Pattern.quote(resultadoNucleo) + "[.!?;:]*\\s*$");
+
+        String scriptAtual = script;
+        while (true) {
+            String scriptNucleo = PONTUACAO_FINAL.matcher(scriptAtual.trim()).replaceAll("");
+            if (scriptNucleo.equals(resultadoNucleo)) {
+                // scriptTeste inteiro é igual ao resultado - não remove (apagaria o passo inteiro).
+                break;
+            }
+            Matcher matcher = duplicacaoNoFinal.matcher(scriptAtual);
+            if (!matcher.find()) {
+                break;
+            }
+            String semDuplicacao = scriptAtual.substring(0, matcher.start()).trim();
+            if (semDuplicacao.isBlank()) {
+                break;
+            }
+            scriptAtual = semDuplicacao;
+        }
+
+        if (!scriptAtual.equals(script)) {
+            item.setScriptTeste(scriptAtual);
+        }
+    }
+
     private String combinarTextos(String script, String resultado) {
         StringBuilder combinado = new StringBuilder();
         

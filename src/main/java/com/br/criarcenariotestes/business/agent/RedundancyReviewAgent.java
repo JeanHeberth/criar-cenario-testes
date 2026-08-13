@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -40,7 +41,7 @@ public class RedundancyReviewAgent implements BaseAgent {
         try {
             AiProvider provider = aiProviderResolver.getActiveProvider();
             String respostaIa = provider.gerarResposta(systemPrompt, userPrompt);
-            
+
             GeneratedScenariosValidator.ValidationResult validacao =
                     generatedScenariosValidator.validarRespostaBruta(respostaIa);
 
@@ -59,15 +60,42 @@ public class RedundancyReviewAgent implements BaseAgent {
                 return;
             }
 
-            context.setCenariosRevisados(cenariosRevisados);
+            List<CenarioItem> cenariosValidos = new ArrayList<>();
+            for (CenarioItem item : cenariosRevisados) {
+                if (generatedScenariosValidator.pareceConteudoNaoCenario(item)) {
+                    log.info("Item pós-revisão descartado por não ser um cenário real " +
+                            "(Passos e Resultado Esperado vazios). nome='{}'", item.getNome());
+                    continue;
+                }
+
+                GeneratedScenariosValidator.ValidationResult bdd =
+                        generatedScenariosValidator.validarEstruturaBdd(item.getScriptTeste());
+                if (!bdd.valido()) {
+                    log.warn("Cenário pós-revisão estruturalmente corrompido ('{}'). " +
+                            "Fail closed: mantendo cenários originais.", bdd.motivo());
+                    context.setCenariosRevisados(context.getCenarios());
+                    return;
+                }
+
+                cenariosValidos.add(item);
+            }
+
+            if (cenariosValidos.isEmpty()) {
+                log.warn("Nenhum cenário real restou após a validação pós-revisão. " +
+                        "Mantendo cenários originais (fail closed).");
+                context.setCenariosRevisados(context.getCenarios());
+                return;
+            }
+
+            context.setCenariosRevisados(cenariosValidos);
             context.addMetadata("revisao_provider", provider.getName());
             context.addMetadata("cenarios_originais", context.getCenarios().size());
-            context.addMetadata("cenarios_revisados", cenariosRevisados.size());
+            context.addMetadata("cenarios_revisados", cenariosValidos.size());
 
             log.info("Revisão concluída. provider='{}', original={}, revisados={}",
                 provider.getName(),
                 context.getCenarios().size(),
-                cenariosRevisados.size());
+                cenariosValidos.size());
             
         } catch (Exception e) {
             log.warn("Erro ao revisar redundâncias: {}. Mantendo cenários originais.", e.getMessage());

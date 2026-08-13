@@ -48,7 +48,12 @@ public class CenarioTextoParser {
                 }
             }
 
-            if (nome.isBlank() && objetivo.isBlank() && precondicao.isBlank() && passos.isBlank() && resultadoEsperado.isBlank()) {
+            // FASE15-BUG-003A: usar apenas os campos de CONTEÚDO aqui (sem `nome`).
+            // `nome` já foi preenchido pelo fallback de primeira linha acima em
+            // praticamente qualquer bloco de texto (incluindo blocos que não são
+            // cenários, como notas/observações finais do Reviewer) — usá-lo neste
+            // guard mascarava blocos totalmente vazios de conteúdo real.
+            if (objetivo.isBlank() && precondicao.isBlank() && passos.isBlank() && resultadoEsperado.isBlank()) {
                 continue;
             }
 
