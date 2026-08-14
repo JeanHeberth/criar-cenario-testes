@@ -122,4 +122,42 @@ class ZephyrFormatterAgentTest {
         assertThat(formatoFinal).contains("2. Informar credenciais");
         assertThat(formatoFinal).contains("3. Clicar em entrar");
     }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: deve incluir Tipo de Evidência, Fontes e Status no texto exportado quando presentes")
+    void deveIncluirTipoDeEvidenciaFontesEStatus() {
+        // Arrange
+        CenarioItem cenarioComEvidencia = new CenarioItem();
+        cenarioComEvidencia.setNome("Login com credenciais válidas");
+        cenarioComEvidencia.setObjetivo("Validar login bem-sucedido");
+        cenarioComEvidencia.setScriptTeste("Dado...\nQuando...\nEntão...");
+        cenarioComEvidencia.setResultadoEsperado("Login realizado com sucesso");
+        cenarioComEvidencia.setStatus("APPROVED");
+        cenarioComEvidencia.setEvidenceType("DOCUMENTED");
+        cenarioComEvidencia.setEvidenceSources("RN-A-01");
+        context.setCenariosRevisados(List.of(cenarioComEvidencia));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        String formatoFinal = context.getFormatoFinal();
+        assertThat(formatoFinal).contains("Tipo de Evidência");
+        assertThat(formatoFinal).contains("DOCUMENTED");
+        assertThat(formatoFinal).contains("Fontes");
+        assertThat(formatoFinal).contains("RN-A-01");
+        assertThat(formatoFinal).contains("Status");
+        assertThat(formatoFinal).contains("APPROVED");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: não deve incluir bloco de evidência quando o cenário não possui esses campos (legado)")
+    void naoDeveIncluirBlocoDeEvidenciaQuandoAusente() {
+        // Act - cenario1/cenario2 do setUp não possuem evidenceType/evidenceSources
+        agent.executar(context);
+
+        // Assert
+        String formatoFinal = context.getFormatoFinal();
+        assertThat(formatoFinal).doesNotContain("Tipo de Evidência");
+    }
 }

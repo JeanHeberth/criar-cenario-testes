@@ -25,4 +25,15 @@ public class CenarioItem {
     private String cobertura;
     private String status;
 
+    /**
+     * FASE15-BUG-005B: rastreabilidade de evidência. Valores conceituais de
+     * evidenceType: DOCUMENTED / DIRECT_INFERENCE / EXPLORATORY.
+     * evidenceSources é texto livre (IDs separados por vírgula, ex.:
+     * "RN-A-02, RN-B-01", ou "USER" quando a fonte é a regra digitada, ou
+     * vazio/"Não se aplica" quando EXPLORATORY). Cenários legados (antes
+     * desta sessão) não possuem esses campos — desserializam como null.
+     */
+    private String evidenceType;
+    private String evidenceSources;
+
 }

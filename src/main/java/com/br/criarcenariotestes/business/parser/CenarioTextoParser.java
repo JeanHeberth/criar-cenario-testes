@@ -75,6 +75,8 @@ public class CenarioTextoParser {
                     .proprietario("JIRAUSER23105")
                     .cobertura(extrairCampo(texto, "Cobertura"))
                     .status(valorOuPadrao(extrairCampo(texto, "Status"), "APPROVED"))
+                    .evidenceType(valorOuNulo(extrairCampo(texto, "Evidência")))
+                    .evidenceSources(valorOuNulo(extrairCampo(texto, "Fontes")))
                     .build();
 
             if (item.getNome() != null && !item.getNome().isBlank()) {
@@ -117,6 +119,8 @@ public class CenarioTextoParser {
                 "Pasta",
                 "Proprietário",
                 "Cobertura",
+                "Evidência",
+                "Fontes",
                 "Status"
         };
 
@@ -254,5 +258,9 @@ public class CenarioTextoParser {
 
     private String valorOuPadrao(String valor, String padrao) {
         return valor == null || valor.isBlank() ? padrao : valor;
+    }
+
+    private String valorOuNulo(String valor) {
+        return valor == null || valor.isBlank() ? null : valor;
     }
 }
