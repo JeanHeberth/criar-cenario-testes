@@ -51,6 +51,18 @@ jira:
   api-token: ${JIRA_API_TOKEN:}
   issue-endpoint: /rest/api/3/issue
 
+# Publicação real dos cenários gerados como casos de teste no Zephyr Scale
+# Cloud. Desabilitado por padrão (fail-closed, mesmo padrão de app.cors e
+# auto-qa.allow-command-execution) - o ZephyrPublisherAgent só roda quando
+# zephyr.enabled=true E as credenciais abaixo estiverem configuradas.
+zephyr:
+  enabled: ${ZEPHYR_ENABLED:false}
+  base-url: ${ZEPHYR_BASE_URL:https://api.zephyrscale.smartbear.com/v2}
+  api-token: ${ZEPHYR_API_TOKEN:}
+  project-key: ${ZEPHYR_PROJECT_KEY:}
+  default-status-name: ${ZEPHYR_DEFAULT_STATUS:Draft}
+  default-priority-name: ${ZEPHYR_DEFAULT_PRIORITY:Normal}
+
 logging:
   level:
     root: INFO

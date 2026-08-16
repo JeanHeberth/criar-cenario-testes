@@ -107,6 +107,67 @@ class GeneratedScenariosValidatorTest {
     }
 
     @Test
+    @DisplayName("validarGeracao: deve rejeitar geração com cenário estruturalmente BDD válido mas com evidência inconsistente (EXPLORATORY+APPROVED)")
+    void validarGeracaoDeveRejeitarCenarioComEvidenciaInconsistente() {
+        String resposta = """
+                ---
+                Nome: Login com credenciais válidas
+                Objetivo: Validar login bem-sucedido
+                Passos:
+                Dado que o usuário está na tela de login
+                Quando ele informa credenciais válidas
+                Então o login é realizado com sucesso
+                Resultado esperado: Login realizado
+                ---
+                """;
+
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com credenciais válidas");
+        item.setObjetivo("Validar login bem-sucedido");
+        item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado com sucesso");
+        item.setResultadoEsperado("Login realizado");
+        item.setStatus("APPROVED");
+        item.setEvidenceType("EXPLORATORY");
+
+        GeneratedScenariosValidator.ValidationResult resultado =
+                validator.validarGeracao(resposta, List.of(item));
+
+        assertThat(resultado.valido()).isFalse();
+        assertThat(resultado.motivo()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("validarGeracao: deve aceitar geração com cenário BDD válido e evidência consistente (DOCUMENTED com fonte preenchida)")
+    void validarGeracaoDeveAceitarCenarioComEvidenciaConsistente() {
+        String resposta = """
+                ---
+                Nome: Login com credenciais válidas
+                Objetivo: Validar login bem-sucedido
+                Passos:
+                Dado que o usuário está na tela de login
+                Quando ele informa credenciais válidas
+                Então o login é realizado com sucesso
+                Resultado esperado: Login realizado
+                ---
+                """;
+
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com credenciais válidas");
+        item.setObjetivo("Validar login bem-sucedido");
+        item.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado com sucesso");
+        item.setResultadoEsperado("Login realizado");
+        item.setStatus("APPROVED");
+        item.setEvidenceType("DOCUMENTED");
+        item.setEvidenceSources("RN-A-01");
+
+        GeneratedScenariosValidator.ValidationResult resultado =
+                validator.validarGeracao(resposta, List.of(item));
+
+        assertThat(resultado.valido()).isTrue();
+        assertThat(resultado.motivo()).isNull();
+    }
+
+    @Test
     @DisplayName("validarRespostaBruta: deve rejeitar plano de arquivos independente dos cenários extraídos")
     void validarRespostaBrutaDeveRejeitarPlanoDeArquivos() {
         String plano = "📋 Plano de Geração - Pasta base: `x/` - Arquivos a criar: - `a.md`";
@@ -354,5 +415,180 @@ class GeneratedScenariosValidatorTest {
         item.setResultadoEsperado("Então o login é realizado com sucesso");
 
         assertThat(validator.pareceConteudoNaoCenario(item)).isFalse();
+    }
+
+    // ===== FASE15-BUG-005B: validação estrutural de evidência =====
+
+    @Test
+    @DisplayName("validarEstruturaEvidencia: item sem evidenceType (formato anterior ao BUG-005B) deve ser considerado válido (retrocompatibilidade)")
+    void validarEstruturaEvidenciaDeveAceitarItemSemEvidenceType() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário legado");
+
+        assertThat(validator.validarEstruturaEvidencia(item).valido()).isTrue();
+    }
+
+    @Test
+    @DisplayName("validarEstruturaEvidencia: evidenceType desconhecido deve ser inválido")
+    void validarEstruturaEvidenciaDeveRejeitarTipoDesconhecido() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário");
+        item.setEvidenceType("TALVEZ");
+
+        assertThat(validator.validarEstruturaEvidencia(item).valido()).isFalse();
+    }
+
+    @Test
+    @DisplayName("validarEstruturaEvidencia: EXPLORATORY com Status APPROVED deve ser inválido")
+    void validarEstruturaEvidenciaDeveRejeitarExploratoryComApproved() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário");
+        item.setEvidenceType("EXPLORATORY");
+        item.setStatus("APPROVED");
+
+        assertThat(validator.validarEstruturaEvidencia(item).valido()).isFalse();
+    }
+
+    @Test
+    @DisplayName("validarEstruturaEvidencia: EXPLORATORY com Status REVIEW_REQUIRED deve ser válido")
+    void validarEstruturaEvidenciaDeveAceitarExploratoryComReviewRequired() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário");
+        item.setEvidenceType("EXPLORATORY");
+        item.setStatus("REVIEW_REQUIRED");
+        item.setEvidenceSources("Não se aplica");
+
+        assertThat(validator.validarEstruturaEvidencia(item).valido()).isTrue();
+    }
+
+    @Test
+    @DisplayName("validarEstruturaEvidencia: DOCUMENTED com evidenceSources vazio deve ser inválido")
+    void validarEstruturaEvidenciaDeveRejeitarDocumentedComSourceVazia() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("");
+
+        assertThat(validator.validarEstruturaEvidencia(item).valido()).isFalse();
+    }
+
+    @Test
+    @DisplayName("validarEstruturaEvidencia: DIRECT_INFERENCE com evidenceSources vazio deve ser inválido")
+    void validarEstruturaEvidenciaDeveRejeitarDirectInferenceComSourceVazia() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário");
+        item.setEvidenceType("DIRECT_INFERENCE");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources(null);
+
+        assertThat(validator.validarEstruturaEvidencia(item).valido()).isFalse();
+    }
+
+    @Test
+    @DisplayName("validarEstruturaEvidencia: DOCUMENTED com evidenceSources preenchido deve ser válido")
+    void validarEstruturaEvidenciaDeveAceitarDocumentedComSourcePreenchida() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RN-B-02");
+
+        assertThat(validator.validarEstruturaEvidencia(item).valido()).isTrue();
+    }
+
+    // ===== FASE15-BUG-005B: checagem determinística de existência de fonte =====
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: source presente literalmente no texto bruto deve ser encontrada")
+    void fonteExisteNoTextoBrutoDeveEncontrarSourceExistente() {
+        String bruto = "RN-A-01: telefone obrigatório. RN-A-02: DDD obrigatório.";
+
+        assertThat(validator.fonteExisteNoTextoBruto("RN-A-02", bruto)).isTrue();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: source inexistente no texto bruto não deve ser encontrada")
+    void fonteExisteNoTextoBrutoNaoDeveEncontrarSourceInexistente() {
+        String bruto = "RN-A-01: telefone obrigatório. RN-A-02: DDD obrigatório.";
+
+        assertThat(validator.fonteExisteNoTextoBruto("RN-A-99", bruto)).isFalse();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: 'USER' é sempre uma referência válida quando existe regra digitada")
+    void fonteExisteNoTextoBrutoDeveAceitarUserComoReferenciaEspecial() {
+        String bruto = "O sistema deve permitir cadastrar um cliente.";
+
+        assertThat(validator.fonteExisteNoTextoBruto("USER", bruto)).isTrue();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: 'USER' não é válido quando não há regra bruta alguma")
+    void fonteExisteNoTextoBrutoDeveRejeitarUserSemRegraBruta() {
+        assertThat(validator.fonteExisteNoTextoBruto("USER", "")).isFalse();
+        assertThat(validator.fonteExisteNoTextoBruto("USER", null)).isFalse();
+    }
+
+    // ===== FASE15-BUG-005B: downgrade determinístico quando source não existe =====
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: DOCUMENTED com source inexistente deve ser rebaixado para EXPLORATORY/REVIEW_REQUIRED")
+    void corrigirSourceInexistenteDeveRebaixarQuandoSourceNaoExiste() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro com CEP oculto no exterior");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RN-A-99");
+
+        validator.corrigirSourceInexistente(item, "RN-A-01: telefone. RN-A-02: DDD. RN-B-01: CEP.");
+
+        assertThat(item.getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(item.getStatus()).isEqualTo("REVIEW_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: DOCUMENTED com source existente NÃO deve ser alterado")
+    void corrigirSourceInexistenteNaoDeveAlterarQuandoSourceExiste() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro com CEP inválido");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RN-B-02");
+
+        validator.corrigirSourceInexistente(item, "RN-B-02: CEP deve possuir exatamente 8 dígitos.");
+
+        assertThat(item.getEvidenceType()).isEqualTo("DOCUMENTED");
+        assertThat(item.getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: múltiplas sources, uma inexistente, deve rebaixar")
+    void corrigirSourceInexistenteDeveRebaixarQuandoUmaDasVariasSourcesNaoExiste() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro combinando duas regras");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RN-A-01, RN-A-99");
+
+        validator.corrigirSourceInexistente(item, "RN-A-01: telefone obrigatório.");
+
+        assertThat(item.getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(item.getStatus()).isEqualTo("REVIEW_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: EXPLORATORY não é afetado (checagem só se aplica a DOCUMENTED/DIRECT_INFERENCE)")
+    void corrigirSourceInexistenteNaoDeveAlterarExploratory() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário exploratório");
+        item.setEvidenceType("EXPLORATORY");
+        item.setStatus("REVIEW_REQUIRED");
+        item.setEvidenceSources("Não se aplica");
+
+        validator.corrigirSourceInexistente(item, "qualquer texto");
+
+        assertThat(item.getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(item.getStatus()).isEqualTo("REVIEW_REQUIRED");
     }
 }

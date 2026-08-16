@@ -54,6 +54,41 @@ public class JiraClient {
         }
     }
 
+    /**
+     * Resolve só o id numérico interno da issue (ex.: 10001) a partir da
+     * key (ex.: "SCRUM-29") - é o id que a API do Zephyr Scale exige pra
+     * vincular um caso de teste a uma issue, key não serve pra isso.
+     */
+    public String buscarIssueId(String taskKey) {
+        validarConfiguracao();
+
+        String url = montarBaseIssueUrl() + "/" + taskKey + "?fields=key";
+
+        HttpHeaders headers = criarHeadersJson();
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class
+            );
+
+            JsonNode issue = objectMapper.readTree(response.getBody());
+            String id = issue.path("id").asText(null);
+            if (id == null || id.isBlank()) {
+                throw new ResponseStatusException(BAD_GATEWAY, "Jira nao retornou 'id' para a task " + taskKey);
+            }
+            return id;
+        } catch (HttpClientErrorException.NotFound ex) {
+            throw new ResponseStatusException(NOT_FOUND, "Task Jira nao encontrada: " + taskKey, ex);
+        } catch (HttpClientErrorException ex) {
+            throw new ResponseStatusException(BAD_GATEWAY, "Falha ao consultar Jira", ex);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(BAD_GATEWAY, "Erro inesperado ao consultar Jira", ex);
+        }
+    }
+
     public byte[] baixarAnexo(String attachmentContentUrl) {
         validarConfiguracao();
 

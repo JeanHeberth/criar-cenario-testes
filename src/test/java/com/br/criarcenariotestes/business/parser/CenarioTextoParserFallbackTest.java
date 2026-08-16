@@ -282,4 +282,162 @@ class CenarioTextoParserFallbackTest {
         assertEquals(1, cenarios.size(), "O bloco de observações finais não deve virar um cenário");
         assertEquals("Login válido", cenarios.get(0).getNome());
     }
+
+    @Test
+    void deveExtrairStatusExplicitoQuandoInformadoPeloAgente() {
+        // FASE15-BUG-005: o contrato do gerador passa a poder emitir um Status
+        // explícito (ex.: REVIEW_REQUIRED para cenários exploratórios/sem fonte
+        // documental). O parser já suporta extrair qualquer valor de "Status:"
+        // genericamente — este teste comprova que o valor explícito prevalece
+        // sobre o default "APPROVED".
+        String respostaComStatusExplicito = """
+                ---
+                Nome: Cadastro informando CEP e país simultaneamente
+                Objetivo: Investigar comportamento quando ambos os campos são informados
+                Passos:
+                Dado que o usuário preenche CEP e país de residência simultaneamente
+                Quando tenta concluir o cadastro
+                Então validar com Produto qual comportamento deve ser adotado
+                Resultado esperado: Ponto a validar - nenhuma fonte documental define o comportamento esperado
+                Rótulos: exploratorio, ponto-a-validar
+                Status: REVIEW_REQUIRED
+                ---
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(respostaComStatusExplicito);
+
+        assertEquals(1, cenarios.size());
+        assertEquals("REVIEW_REQUIRED", cenarios.get(0).getStatus());
+        assertEquals("exploratorio, ponto-a-validar", cenarios.get(0).getRotulos());
+    }
+
+    @Test
+    void deveManterStatusApprovedComoPadraoQuandoNaoInformado() {
+        // Regressão: cenário documentado normal, sem Status explícito, continua
+        // com o default "APPROVED" (comportamento pré-existente preservado).
+        String respostaSemStatus = """
+                ---
+                Nome: CEP deve possuir exatamente 8 dígitos
+                Objetivo: Validar formato do CEP para clientes residentes no Brasil
+                Passos:
+                Dado que o cliente é residente no Brasil
+                Quando informa um CEP com quantidade de dígitos diferente de 8
+                Então o sistema rejeita o cadastro
+                Resultado esperado: Cadastro rejeitado por CEP em formato inválido
+                ---
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(respostaSemStatus);
+
+        assertEquals(1, cenarios.size());
+        assertEquals("APPROVED", cenarios.get(0).getStatus());
+    }
+
+    @Test
+    void deveExtrairStatusLimpoQuandoStatusVemAntesDeEvidenciaEFontes() {
+        // FASE15-BUG-005B (achado na sessão 13, retest real): o agent.md
+        // documenta a ordem "Status" -> "Evidência" -> "Fontes" no formato
+        // padrão de cenário, e é essa ordem que a IA real usa na prática.
+        // O campo Status não pode "engolir" o conteúdo de Evidência/Fontes
+        // que vem depois dele no texto.
+        String resposta = """
+                ---
+                Nome: Preenchimento simultâneo de CEP e país para residente no exterior
+                Objetivo: Investigar comportamento ao preencher CEP e país juntos
+                Passos:
+                Dado que o cliente acessa a tela de cadastro
+                Quando informa CEP e país de residência simultaneamente
+                Então registrar o comportamento observado para validação posterior
+                Resultado esperado: Ponto a validar - nenhuma fonte define esse comportamento
+                Rótulos: exploratorio, ponto-a-validar
+                Status: REVIEW_REQUIRED
+                Evidência: EXPLORATORY
+                Fontes: Não se aplica
+                ---
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(resposta);
+
+        assertEquals(1, cenarios.size());
+        assertEquals("REVIEW_REQUIRED", cenarios.get(0).getStatus());
+        assertEquals("EXPLORATORY", cenarios.get(0).getEvidenceType());
+        assertEquals("Não se aplica", cenarios.get(0).getEvidenceSources());
+    }
+
+    @Test
+    void deveExtrairEvidenciaEFontesQuandoDocumentado() {
+        // FASE15-BUG-005B: novos campos Evidência/Fontes, mapeados para
+        // evidenceType/evidenceSources.
+        String resposta = """
+                ---
+                Nome: Cadastro com CEP diferente de 8 dígitos
+                Objetivo: Validar formato do CEP
+                Passos:
+                Dado que o cliente é residente no Brasil
+                Quando informa um CEP com quantidade de dígitos diferente de 8
+                Então o sistema rejeita o cadastro
+                Resultado esperado: Cadastro rejeitado por CEP em formato inválido
+                Rótulos: cep, formato
+                Status: APPROVED
+                Evidência: DOCUMENTED
+                Fontes: RN-B-02
+                ---
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(resposta);
+
+        assertEquals(1, cenarios.size());
+        assertEquals("APPROVED", cenarios.get(0).getStatus());
+        assertEquals("DOCUMENTED", cenarios.get(0).getEvidenceType());
+        assertEquals("RN-B-02", cenarios.get(0).getEvidenceSources());
+    }
+
+    @Test
+    void deveExtrairEvidenciaExploratoriaComFontesNaoAplica() {
+        String resposta = """
+                ---
+                Nome: Troca do tipo de residência durante o cadastro
+                Objetivo: Investigar comportamento ao alternar residência
+                Passos:
+                Dado que o cliente altera a residência de Brasil para exterior
+                Quando confirma a alteração
+                Então registrar o comportamento observado para validação posterior
+                Resultado esperado: Ponto a validar - nenhuma fonte define esse comportamento
+                Rótulos: exploratorio, ponto-a-validar
+                Status: REVIEW_REQUIRED
+                Evidência: EXPLORATORY
+                Fontes: Não se aplica
+                ---
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(resposta);
+
+        assertEquals(1, cenarios.size());
+        assertEquals("EXPLORATORY", cenarios.get(0).getEvidenceType());
+        assertEquals("Não se aplica", cenarios.get(0).getEvidenceSources());
+        assertEquals("REVIEW_REQUIRED", cenarios.get(0).getStatus());
+    }
+
+    @Test
+    void deveManterEvidenciaNulaQuandoNaoInformada() {
+        // Regressão: cenário sem os novos campos (formato anterior ao BUG-005B)
+        // continua parseando normalmente, sem quebrar.
+        String resposta = """
+                ---
+                Nome: Login válido
+                Objetivo: Validar login
+                Passos:
+                Dado que o usuário está na tela de login
+                Quando ele informa credenciais válidas
+                Então o login é realizado com sucesso
+                Resultado esperado: Login realizado
+                ---
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(resposta);
+
+        assertEquals(1, cenarios.size());
+        assertNull(cenarios.get(0).getEvidenceType());
+        assertNull(cenarios.get(0).getEvidenceSources());
+    }
 }

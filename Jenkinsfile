@@ -128,6 +128,28 @@ pipeline {
                 }
             }
         }
+
+        stage('Disparar Testes Automatizados (develop)') {
+
+            when {
+                expression {
+                    def gitBranch = (env.GIT_BRANCH ?: '').toLowerCase()
+                    return gitBranch == 'origin/develop' ||
+                           gitBranch == 'develop'
+                }
+            }
+
+            steps {
+                echo 'Disparando pipeline de testes automatizados (TestNG + RestAssured)...'
+                build(
+                    job: 'criarCenarioTesteAPITestes',
+                    wait: false,
+                    parameters: [
+                        string(name: 'API_GIT_BRANCH', value: 'develop')
+                    ]
+                )
+            }
+        }
     }
 
     post {

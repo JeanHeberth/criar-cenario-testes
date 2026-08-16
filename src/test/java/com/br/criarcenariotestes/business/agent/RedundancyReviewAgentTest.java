@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -329,5 +330,241 @@ class RedundancyReviewAgentTest {
 
         // Assert - fail closed: mantém os cenários ORIGINAIS (pré-revisão), não os revisados
         assertThat(context.getCenariosRevisados()).isEqualTo(context.getCenarios());
+    }
+
+    // ===== FASE15-BUG-005: Reviewer como segunda barreira epistêmica =====
+
+    @Test
+    @DisplayName("FASE15-BUG-005: o prompt do Reviewer deve instruir a reclassificar afirmações sem suporte documental como exploratórias")
+    void promptDoReviewerDeveInstruirReclassificacaoEpistemica() {
+        // Arrange
+        String respostaRevisada = "---\nNome: CT001\n---";
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(new CenarioItem() {{
+            setNome("CT001");
+            setScriptTeste("Dado...\nQuando...\nEntão...");
+        }}));
+
+        // Act
+        agent.executar(context);
+
+        // Assert - captura o systemPrompt realmente enviado à IA
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(aiProvider).gerarResposta(systemPromptCaptor.capture(), anyString());
+        String systemPrompt = systemPromptCaptor.getValue();
+
+        assertThat(systemPrompt).contains("REVIEW_REQUIRED");
+        assertThat(systemPrompt.toLowerCase())
+                .as("Reviewer deve ser instruído a não promover hipótese para requisito confirmado")
+                .containsAnyOf("suporte documental", "sem fonte", "não promova", "nao promova");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005: o prompt do Reviewer deve instruir a preservar cenários exploratórios legítimos, não apagá-los")
+    void promptDoReviewerDeveInstruirPreservarExploratorios() {
+        // Arrange
+        String respostaRevisada = "---\nNome: CT001\n---";
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(new CenarioItem() {{
+            setNome("CT001");
+            setScriptTeste("Dado...\nQuando...\nEntão...");
+        }}));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(aiProvider).gerarResposta(systemPromptCaptor.capture(), anyString());
+        String systemPrompt = systemPromptCaptor.getValue().toLowerCase();
+
+        assertThat(systemPrompt)
+                .as("Reviewer não deve apagar cenários exploratórios legítimos, só reclassificá-los")
+                .containsAnyOf("preserv", "não apague", "nao apague", "manter");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005A: o prompt do Reviewer deve instruir a não aceitar timing/interação de validação sem fonte que o defina")
+    void promptDoReviewerDeveInstruirNaoAceitarTimingSemFonte() {
+        // Arrange
+        String respostaRevisada = "---\nNome: CT001\n---";
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(new CenarioItem() {{
+            setNome("CT001");
+            setScriptTeste("Dado...\nQuando...\nEntão...");
+        }}));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(aiProvider).gerarResposta(systemPromptCaptor.capture(), anyString());
+        String systemPrompt = systemPromptCaptor.getValue().toLowerCase();
+
+        assertThat(systemPrompt)
+                .as("Reviewer deve distinguir O QUE validar de QUANDO/COMO a validação ocorre")
+                .contains("quando");
+        assertThat(systemPrompt).containsAnyOf("tempo real", "imediatamente");
+        assertThat(systemPrompt).containsAnyOf("onblur", "ao sair do campo", "onchange");
+    }
+
+    // ===== FASE15-BUG-005B: rastreabilidade de evidência no Reviewer =====
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: o prompt do Reviewer deve instruir a validar semanticamente se a fonte citada sustenta o comportamento (exemplo RN-A-02/ocultar CEP)")
+    void promptDoReviewerDeveInstruirValidacaoSemanticaDeEvidencia() {
+        // Arrange
+        String respostaRevisada = "---\nNome: CT001\n---";
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(new CenarioItem() {{
+            setNome("CT001");
+            setScriptTeste("Dado...\nQuando...\nEntão...");
+        }}));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(aiProvider).gerarResposta(systemPromptCaptor.capture(), anyString());
+        String systemPrompt = systemPromptCaptor.getValue();
+        String lower = systemPrompt.toLowerCase();
+
+        assertThat(systemPrompt).contains("EXPLORATORY");
+        assertThat(lower).contains("rn-a-02");
+        assertThat(lower)
+                .as("Reviewer deve reconhecer que citar fonte real não basta se ela não sustenta semanticamente o comportamento")
+                .containsAnyOf("não sustenta", "não sustentam", "não justifica", "semanticamente");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: o prompt do Reviewer deve proibir promover EXPLORATORY para DOCUMENTED/DIRECT_INFERENCE")
+    void promptDoReviewerDeveProibirPromoverExploratoryParaDocumented() {
+        // Arrange
+        String respostaRevisada = "---\nNome: CT001\n---";
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(new CenarioItem() {{
+            setNome("CT001");
+            setScriptTeste("Dado...\nQuando...\nEntão...");
+        }}));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(aiProvider).gerarResposta(systemPromptCaptor.capture(), anyString());
+        String systemPrompt = systemPromptCaptor.getValue();
+
+        assertThat(systemPrompt).contains("EXPLORATORY");
+        assertThat(systemPrompt).contains("DOCUMENTED");
+        assertThat(systemPrompt).contains("DIRECT_INFERENCE");
+        assertThat(systemPrompt.toLowerCase())
+                .as("Reviewer não deve promover EXPLORATORY para DOCUMENTED/DIRECT_INFERENCE")
+                .containsAnyOf("não promova", "nao promova", "não promover", "nao promover");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: o userPrompt deve incluir Evidência e Fontes de cada cenário original")
+    void userPromptDeveIncluirEvidenciaEFontesDeCadaCenario() {
+        // Arrange
+        context.getCenarios().get(0).setEvidenceType("DOCUMENTED");
+        context.getCenarios().get(0).setEvidenceSources("RN-A-01");
+
+        String respostaRevisada = "---\nNome: CT001\n---";
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(new CenarioItem() {{
+            setNome("CT001");
+            setScriptTeste("Dado...\nQuando...\nEntão...");
+        }}));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        ArgumentCaptor<String> userPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(aiProvider).gerarResposta(anyString(), userPromptCaptor.capture());
+        String userPrompt = userPromptCaptor.getValue();
+
+        assertThat(userPrompt).contains("Evidência: DOCUMENTED");
+        assertThat(userPrompt).contains("Fontes: RN-A-01");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: o userPrompt deve incluir o texto bruto de regraDeNegocio para o Reviewer checar as fontes citadas")
+    void userPromptDeveIncluirRegraDeNegocioBruta() {
+        // Arrange
+        CenarioRequest request = new CenarioRequest(
+                "Login OAuth",
+                "RN-Z-99: regra de negócio bruta exclusiva deste teste",
+                "gerador_cenarios_testes"
+        );
+        context = new WorkflowContext(request, WorkflowType.COMPLETO);
+        CenarioItem cenario = new CenarioItem();
+        cenario.setNome("Login com email válido");
+        cenario.setScriptTeste("Dado...\nQuando...\nEntão...");
+        context.setCenarios(List.of(cenario));
+
+        String respostaRevisada = "---\nNome: CT001\n---";
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(new CenarioItem() {{
+            setNome("CT001");
+            setScriptTeste("Dado...\nQuando...\nEntão...");
+        }}));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        ArgumentCaptor<String> userPromptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(aiProvider).gerarResposta(anyString(), userPromptCaptor.capture());
+        String userPrompt = userPromptCaptor.getValue();
+
+        assertThat(userPrompt).contains("RN-Z-99: regra de negócio bruta exclusiva deste teste");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: após a revisão, deve rebaixar item DOCUMENTED com fonte inexistente na regra de negócio bruta")
+    void deveRebaixarItemPosRevisaoComFonteInexistente() {
+        // Arrange
+        CenarioRequest request = new CenarioRequest(
+                "Login OAuth",
+                "Sistema de login",
+                "gerador_cenarios_testes"
+        );
+        context = new WorkflowContext(request, WorkflowType.COMPLETO);
+        CenarioItem cenarioOriginal = new CenarioItem();
+        cenarioOriginal.setNome("Login com email válido");
+        cenarioOriginal.setScriptTeste("Dado...\nQuando...\nEntão...");
+        context.setCenarios(List.of(cenarioOriginal));
+
+        String respostaRevisada = "---\nNome: CT001\n---";
+        CenarioItem cenarioRevisado = new CenarioItem();
+        cenarioRevisado.setNome("CT001");
+        cenarioRevisado.setScriptTeste("Dado...\nQuando...\nEntão...");
+        cenarioRevisado.setStatus("APPROVED");
+        cenarioRevisado.setEvidenceType("DOCUMENTED");
+        cenarioRevisado.setEvidenceSources("RN-INEXISTENTE-99");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(cenarioRevisado));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenariosRevisados()).hasSize(1);
+        CenarioItem resultado = context.getCenariosRevisados().get(0);
+        assertThat(resultado.getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(resultado.getStatus()).isEqualTo("REVIEW_REQUIRED");
     }
 }

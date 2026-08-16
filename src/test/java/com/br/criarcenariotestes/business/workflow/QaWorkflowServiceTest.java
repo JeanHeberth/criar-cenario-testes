@@ -52,6 +52,9 @@ class QaWorkflowServiceTest {
     private ZephyrFormatterAgent zephyrFormatterAgent;
 
     @Mock
+    private ZephyrPublisherAgent zephyrPublisherAgent;
+
+    @Mock
     private AgentLoaderService agentLoaderService;
 
     @Mock
@@ -71,6 +74,7 @@ class QaWorkflowServiceTest {
                 redundancyReviewAgent,
                 bddFormatterAgent,
                 zephyrFormatterAgent,
+                zephyrPublisherAgent,
                 agentLoaderService,
                 cenarioRepository,
                 new GeneratedScenariosValidator()
@@ -92,6 +96,7 @@ class QaWorkflowServiceTest {
         when(redundancyReviewAgent.getNome()).thenReturn("Redundancy Reviewer");
         when(bddFormatterAgent.getNome()).thenReturn("BDD Formatter");
         when(zephyrFormatterAgent.getNome()).thenReturn("Zephyr Formatter");
+        when(zephyrPublisherAgent.getNome()).thenReturn("Zephyr Publisher");
     }
 
     @Test
@@ -116,6 +121,7 @@ class QaWorkflowServiceTest {
         verify(redundancyReviewAgent, times(1)).executar(any(WorkflowContext.class));
         verify(bddFormatterAgent, times(1)).executar(any(WorkflowContext.class));
         verify(zephyrFormatterAgent, times(1)).executar(any(WorkflowContext.class));
+        verify(zephyrPublisherAgent, times(1)).executar(any(WorkflowContext.class));
         verify(cenarioRepository, times(1)).save(any(Cenario.class));
     }
 
@@ -142,6 +148,7 @@ class QaWorkflowServiceTest {
         verify(redundancyReviewAgent, never()).executar(any());
         verify(bddFormatterAgent, times(1)).executar(any());
         verify(zephyrFormatterAgent, times(1)).executar(any());
+        verify(zephyrPublisherAgent, times(1)).executar(any());
     }
 
     @Test
@@ -165,6 +172,7 @@ class QaWorkflowServiceTest {
         verify(redundancyReviewAgent, times(1)).executar(any());
         verify(bddFormatterAgent, times(1)).executar(any());
         verify(zephyrFormatterAgent, times(1)).executar(any());
+        verify(zephyrPublisherAgent, times(1)).executar(any());
     }
 
     @Test
@@ -274,6 +282,12 @@ class QaWorkflowServiceTest {
                 .isInstanceOf(RuntimeException.class);
 
         verify(cenarioRepository, never()).save(any(Cenario.class));
+
+        // Regressão: publicar no Zephyr ANTES da validação estrutural criava
+        // casos de teste órfãos e permanentes no Zephyr para cenários que
+        // acabavam rejeitados e nunca persistidos aqui. Nunca deve publicar
+        // quando a validação falha.
+        verify(zephyrPublisherAgent, never()).executar(any());
     }
 
     @Test
@@ -296,6 +310,12 @@ class QaWorkflowServiceTest {
                 .isInstanceOf(RuntimeException.class);
 
         verify(cenarioRepository, never()).save(any(Cenario.class));
+
+        // Regressão: publicar no Zephyr ANTES da validação estrutural criava
+        // casos de teste órfãos e permanentes no Zephyr para cenários que
+        // acabavam rejeitados e nunca persistidos aqui. Nunca deve publicar
+        // quando a validação falha.
+        verify(zephyrPublisherAgent, never()).executar(any());
     }
 
     @Test
@@ -318,6 +338,12 @@ class QaWorkflowServiceTest {
                 .isInstanceOf(RuntimeException.class);
 
         verify(cenarioRepository, never()).save(any(Cenario.class));
+
+        // Regressão: publicar no Zephyr ANTES da validação estrutural criava
+        // casos de teste órfãos e permanentes no Zephyr para cenários que
+        // acabavam rejeitados e nunca persistidos aqui. Nunca deve publicar
+        // quando a validação falha.
+        verify(zephyrPublisherAgent, never()).executar(any());
     }
 
     private void mockAgentesHabilitados() {
@@ -328,6 +354,7 @@ class QaWorkflowServiceTest {
         when(redundancyReviewAgent.isEnabled(any())).thenReturn(true);
         when(bddFormatterAgent.isEnabled(any())).thenReturn(true);
         when(zephyrFormatterAgent.isEnabled(any())).thenReturn(true);
+        when(zephyrPublisherAgent.isEnabled(any())).thenReturn(true);
     }
 
     private CenarioItem cenarioBddValido() {
