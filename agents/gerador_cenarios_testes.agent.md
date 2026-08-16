@@ -169,6 +169,7 @@ Não existe etapa de aprovação nesta chamada. Gere os cenários diretamente.
   E [resultado adicional, quando necessário]
   ```
 - Todo cenário deve conter, no mínimo, um "Dado" (ou "Dado que"), um "Quando" e um "Então", cada um começando sua própria linha.
+- Cada linha de Passos (Dado/Dado que/Quando/Então/E) começa a palavra-chave imediatamente na margem esquerda da linha, sem espaços, tabulação ou marcador de lista (`-`, `*`) antes da palavra-chave — mesmo quando Massa de dados ou outro campo acima usar indentação com bullets.
 - NÃO use passos numerados (`1.`, `2.`, `3.`) como estrutura dos Passos — isso não é mais aceito.
 - "Dado"/"Dado que" descreve apenas o contexto/pré-condição necessária para tornar o cenário executável — não copie literalmente todo o conteúdo do campo Pré-condições, apenas o que for relevante ao passo.
 - "Então"/"E" descrevem as verificações do cenário. O campo Resultado Esperado pode resumir o desfecho final, mas não deve repetir o texto de Então palavra por palavra.

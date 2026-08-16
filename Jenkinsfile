@@ -142,7 +142,7 @@ pipeline {
             steps {
                 echo 'Disparando pipeline de testes automatizados (TestNG + RestAssured)...'
                 build(
-                    job: 'criar-cenario-testes-api-tests',
+                    job: 'criarCenarioTesteAPITestes',
                     wait: false,
                     parameters: [
                         string(name: 'API_GIT_BRANCH', value: 'develop')

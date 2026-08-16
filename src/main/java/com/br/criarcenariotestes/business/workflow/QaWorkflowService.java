@@ -29,6 +29,7 @@ public class QaWorkflowService {
     private final RedundancyReviewAgent redundancyReviewAgent;
     private final BddFormatterAgent bddFormatterAgent;
     private final ZephyrFormatterAgent zephyrFormatterAgent;
+    private final ZephyrPublisherAgent zephyrPublisherAgent;
 
     private final AgentLoaderService agentLoaderService;
     private final CenarioRepository cenarioRepository;
@@ -113,6 +114,15 @@ public class QaWorkflowService {
     private CenarioResponse salvarResultado(WorkflowContext context) {
         List<CenarioItem> cenariosFinais = context.getCenariosFinais();
         validarCenariosFinaisAntesDePersistir(cenariosFinais);
+
+        // Publica no Zephyr só DEPOIS da validação estrutural passar - nunca
+        // antes. Publicar antes (como no pipeline genérico de agentes) cria
+        // casos de teste reais e permanentes no Zephyr para cenários que
+        // podem ser rejeitados logo em seguida e nunca chegar a ser
+        // persistidos aqui, virando lixo órfão no board do Zephyr.
+        if (zephyrPublisherAgent.isEnabled(context)) {
+            zephyrPublisherAgent.executar(context);
+        }
 
         Cenario cenario = new Cenario();
         cenario.setTitulo(context.getRequest().titulo());

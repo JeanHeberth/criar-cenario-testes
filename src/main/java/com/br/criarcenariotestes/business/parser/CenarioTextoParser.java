@@ -119,9 +119,9 @@ public class CenarioTextoParser {
                 "Pasta",
                 "Proprietário",
                 "Cobertura",
+                "Status",
                 "Evidência",
-                "Fontes",
-                "Status"
+                "Fontes"
         };
 
         int indice = -1;

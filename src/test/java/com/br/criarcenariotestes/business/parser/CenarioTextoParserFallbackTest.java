@@ -334,6 +334,37 @@ class CenarioTextoParserFallbackTest {
     }
 
     @Test
+    void deveExtrairStatusLimpoQuandoStatusVemAntesDeEvidenciaEFontes() {
+        // FASE15-BUG-005B (achado na sessão 13, retest real): o agent.md
+        // documenta a ordem "Status" -> "Evidência" -> "Fontes" no formato
+        // padrão de cenário, e é essa ordem que a IA real usa na prática.
+        // O campo Status não pode "engolir" o conteúdo de Evidência/Fontes
+        // que vem depois dele no texto.
+        String resposta = """
+                ---
+                Nome: Preenchimento simultâneo de CEP e país para residente no exterior
+                Objetivo: Investigar comportamento ao preencher CEP e país juntos
+                Passos:
+                Dado que o cliente acessa a tela de cadastro
+                Quando informa CEP e país de residência simultaneamente
+                Então registrar o comportamento observado para validação posterior
+                Resultado esperado: Ponto a validar - nenhuma fonte define esse comportamento
+                Rótulos: exploratorio, ponto-a-validar
+                Status: REVIEW_REQUIRED
+                Evidência: EXPLORATORY
+                Fontes: Não se aplica
+                ---
+                """;
+
+        List<CenarioItem> cenarios = parser.parsear(resposta);
+
+        assertEquals(1, cenarios.size());
+        assertEquals("REVIEW_REQUIRED", cenarios.get(0).getStatus());
+        assertEquals("EXPLORATORY", cenarios.get(0).getEvidenceType());
+        assertEquals("Não se aplica", cenarios.get(0).getEvidenceSources());
+    }
+
+    @Test
     void deveExtrairEvidenciaEFontesQuandoDocumentado() {
         // FASE15-BUG-005B: novos campos Evidência/Fontes, mapeados para
         // evidenceType/evidenceSources.
@@ -347,15 +378,16 @@ class CenarioTextoParserFallbackTest {
                 Então o sistema rejeita o cadastro
                 Resultado esperado: Cadastro rejeitado por CEP em formato inválido
                 Rótulos: cep, formato
+                Status: APPROVED
                 Evidência: DOCUMENTED
                 Fontes: RN-B-02
-                Status: APPROVED
                 ---
                 """;
 
         List<CenarioItem> cenarios = parser.parsear(resposta);
 
         assertEquals(1, cenarios.size());
+        assertEquals("APPROVED", cenarios.get(0).getStatus());
         assertEquals("DOCUMENTED", cenarios.get(0).getEvidenceType());
         assertEquals("RN-B-02", cenarios.get(0).getEvidenceSources());
     }
@@ -372,9 +404,9 @@ class CenarioTextoParserFallbackTest {
                 Então registrar o comportamento observado para validação posterior
                 Resultado esperado: Ponto a validar - nenhuma fonte define esse comportamento
                 Rótulos: exploratorio, ponto-a-validar
+                Status: REVIEW_REQUIRED
                 Evidência: EXPLORATORY
                 Fontes: Não se aplica
-                Status: REVIEW_REQUIRED
                 ---
                 """;
 

@@ -36,4 +36,13 @@ public class CenarioItem {
     private String evidenceType;
     private String evidenceSources;
 
+    /**
+     * Key do caso de teste real criado no Zephyr Scale Cloud (ex.:
+     * "SCRUM-T123"), preenchida por ZephyrPublisherAgent. Null quando a
+     * publicação está desabilitada (zephyr.enabled=false) ou falhou para
+     * este item específico — nesse caso o cenário continua válido, só sem
+     * espelho no Zephyr.
+     */
+    private String zephyrTestCaseKey;
+
 }
