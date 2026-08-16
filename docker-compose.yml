@@ -9,6 +9,9 @@ services:
     environment:
       - MONGO_URI_NUVEM=${MONGO_URI_NUVEM}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ZEPHYR_ENABLED=${ZEPHYR_ENABLED:-false}
+      - ZEPHYR_API_TOKEN=${ZEPHYR_API_TOKEN:-}
+      - ZEPHYR_PROJECT_KEY=${ZEPHYR_PROJECT_KEY:-}
     networks:
       - rede-app
 

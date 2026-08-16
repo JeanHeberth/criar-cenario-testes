@@ -55,4 +55,112 @@ class GeradorCenariosAgentContractTest {
                 .as("contrato deve reforçar a exigência mínima de estrutura BDD")
                 .containsAnyOf("mínimo", "obrigatório", "obrigatória");
     }
+
+    @Test
+    @DisplayName("FASE15-BUG-005: deve instruir a não afirmar comportamento sem suporte documental como requisito obrigatório")
+    void deveProibirAfirmarComportamentoSemSuporteComoObrigatorio() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+
+        assertThat(conteudo)
+                .as("contrato deve mencionar explicitamente a exigência de suporte documental/fonte para afirmações categóricas")
+                .containsIgnoringCase("REVIEW_REQUIRED");
+        assertThat(conteudo.toLowerCase())
+                .containsAnyOf("suporte documental", "sem fonte", "não documentado", "não estiver documentad");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005: deve definir como classificar um cenário exploratório sem inventar novo campo/schema")
+    void deveDefinirClassificacaoDeCenarioExploratorioReusandoCamposExistentes() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+
+        assertThat(conteudo.toLowerCase())
+                .as("deve instruir o uso de Status/Rótulos existentes para marcar cenário exploratório")
+                .contains("exploratório");
+        assertThat(conteudo).contains("Status:");
+        assertThat(conteudo).contains("Rótulos:");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005: deve continuar permitindo inferência lógica direta como cenário normal (não reduzir criatividade)")
+    void deveContinuarPermitindoInferenciaLogicaDireta() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+
+        assertThat(conteudo.toLowerCase())
+                .as("contrato não deve proibir inferência lógica defensável, só afirmações sem nenhum suporte")
+                .containsAnyOf("inferência lógica", "inferencia logica");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005A: deve distinguir explicitamente O QUE validar de QUANDO/COMO a validação ocorre")
+    void deveDistinguirOQueValidarDeQuandoValidar() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+
+        assertThat(conteudo.toLowerCase())
+                .as("contrato deve nomear explicitamente a distinção O QUE vs QUANDO/COMO")
+                .contains("o que")
+                .containsAnyOf("quando/como", "quando ou como", "quando e como");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005A: deve listar exemplos de timing/interação que não podem ser inferidos sem fonte")
+    void deveListarExemplosDeTimingNaoInferivel() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+        String lower = conteudo.toLowerCase();
+
+        assertThat(lower).containsAnyOf("tempo real", "imediatamente");
+        assertThat(lower).containsAnyOf("onblur", "ao sair do campo");
+        assertThat(lower).containsAnyOf("onchange", "durante a digitação", "durante o preenchimento");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: deve incluir os campos Evidência e Fontes no formato padrão de cenário")
+    void deveIncluirCamposEvidenciaEFontesNoFormatoPadrao() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+
+        assertThat(conteudo).contains("Evidência:");
+        assertThat(conteudo).contains("Fontes:");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: deve definir os três valores de evidenceType (DOCUMENTED/DIRECT_INFERENCE/EXPLORATORY)")
+    void deveDefinirTresValoresDeEvidenceType() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+
+        assertThat(conteudo).contains("DOCUMENTED");
+        assertThat(conteudo).contains("DIRECT_INFERENCE");
+        assertThat(conteudo).contains("EXPLORATORY");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: deve instruir a citar a fonte real do documento (ID de regra) e usar USER para a regra digitada")
+    void deveInstruirCitarFonteRealOuUser() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+
+        assertThat(conteudo).contains("USER");
+        assertThat(conteudo.toLowerCase())
+                .as("contrato deve proibir inventar IDs de regra que não existem no documento fonte")
+                .containsAnyOf("não invente", "nunca invente", "não inventar", "nunca inventar");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: deve trazer um exemplo de fonte existente mas semanticamente irrelevante (cenário EXPLORATORY mesmo citando fonte real)")
+    void deveTrazerExemploDeFonteExistenteMasIrrelevante() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+        String lower = conteudo.toLowerCase();
+
+        assertThat(lower)
+                .as("contrato deve deixar claro que citar uma fonte real não basta — ela precisa sustentar semanticamente o comportamento afirmado")
+                .containsAnyOf("não sustenta", "não sustentam", "não justifica", "semanticamente");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: cenário misto deve assumir a menor certeza entre suas partes (nunca aprovação parcial)")
+    void deveDefinirRegraDeMenorCertezaVenceParaCenarioMisto() throws IOException {
+        String conteudo = Files.readString(AGENT_FILE);
+        String lower = conteudo.toLowerCase();
+
+        assertThat(lower)
+                .as("contrato deve nomear explicitamente a regra de menor certeza vence para cenários mistos")
+                .containsAnyOf("menor certeza", "cenário misto", "cenario misto");
+    }
 }

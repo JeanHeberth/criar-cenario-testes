@@ -7,6 +7,7 @@ import com.br.criarcenariotestes.business.agent.TestPlanAgent;
 import com.br.criarcenariotestes.business.agent.TestScenarioAgent;
 import com.br.criarcenariotestes.business.agent.TranscriptAnalysisAgent;
 import com.br.criarcenariotestes.business.agent.ZephyrFormatterAgent;
+import com.br.criarcenariotestes.business.agent.ZephyrPublisherAgent;
 import com.br.criarcenariotestes.business.ai.AiProvider;
 import com.br.criarcenariotestes.business.ai.AiProviderResolver;
 import com.br.criarcenariotestes.business.dto.CenarioRequest;
@@ -80,6 +81,9 @@ class QaWorkflowServiceBug002RegressionTest {
     @Mock
     private ZephyrFormatterAgent zephyrFormatterAgent;
 
+    @Mock
+    private ZephyrPublisherAgent zephyrPublisherAgent;
+
     private RedundancyReviewAgent redundancyReviewAgentSpy;
     private QaWorkflowService service;
 
@@ -101,6 +105,7 @@ class QaWorkflowServiceBug002RegressionTest {
                 redundancyReviewAgentSpy,
                 bddFormatterAgent,
                 zephyrFormatterAgent,
+                zephyrPublisherAgent,
                 agentLoaderService,
                 cenarioRepository,
                 validator
@@ -112,6 +117,7 @@ class QaWorkflowServiceBug002RegressionTest {
         when(testPlanAgent.isEnabled(any())).thenReturn(true);
         when(bddFormatterAgent.isEnabled(any())).thenReturn(true);
         when(zephyrFormatterAgent.isEnabled(any())).thenReturn(true);
+        when(zephyrPublisherAgent.isEnabled(any())).thenReturn(true);
     }
 
     @Test
@@ -148,6 +154,10 @@ class QaWorkflowServiceBug002RegressionTest {
 
         // O Reviewer NUNCA deve receber uma geração inválida.
         verify(redundancyReviewAgentSpy, never()).executar(any());
+
+        // Nem o Zephyr Publisher - nunca deve criar casos de teste reais a
+        // partir de uma geração estruturalmente inválida.
+        verify(zephyrPublisherAgent, never()).executar(any());
 
         // Nada deve ser persistido a partir de uma geração inválida.
         verify(cenarioRepository, never()).save(any(Cenario.class));

@@ -269,4 +269,96 @@ class TestScenarioAgentTest {
         verify(aiProvider, times(2)).gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS));
         assertThat(context.getCenarios()).isNull();
     }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: deve rebaixar para EXPLORATORY/REVIEW_REQUIRED quando a fonte citada não existe na regra de negócio bruta")
+    void deveRebaixarCenarioQuandoFonteDeEvidenciaNaoExisteNaRegraDeNegocio() {
+        // Arrange - context.getRequest().regraDeNegocio() = "Sistema de login" (setUp), não contém "RN-X-99"
+        String respostaIA = """
+                ---
+                Nome: Login com credenciais válidas
+                Objetivo: Validar login bem-sucedido
+                Passos:
+                Dado que o usuário está na tela de login
+                Quando ele informa credenciais válidas
+                Então o login é realizado com sucesso
+                Resultado esperado: Login realizado
+                Evidência: DOCUMENTED
+                Fontes: RN-X-99
+                ---
+                """;
+
+        CenarioItem cenario1 = new CenarioItem();
+        cenario1.setNome("Login com credenciais válidas");
+        cenario1.setObjetivo("Validar login bem-sucedido");
+        cenario1.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado com sucesso");
+        cenario1.setStatus("APPROVED");
+        cenario1.setEvidenceType("DOCUMENTED");
+        cenario1.setEvidenceSources("RN-X-99");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn(respostaIA);
+        when(aiProvider.getName()).thenReturn("OpenAI");
+        when(cenarioTextoParser.parsear(respostaIA)).thenReturn(List.of(cenario1));
+        when(cenarioTextoParser.extrairCriterios(respostaIA)).thenReturn("Sistema deve permitir login");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenarios()).hasSize(1);
+        assertThat(context.getCenarios().get(0).getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(context.getCenarios().get(0).getStatus()).isEqualTo("REVIEW_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B: não deve alterar evidência quando a fonte citada existe na regra de negócio bruta")
+    void naoDeveAlterarEvidenciaQuandoFonteExisteNaRegraDeNegocio() {
+        // Arrange - regraDeNegocio contém literalmente "OAuth"
+        CenarioRequest request = new CenarioRequest(
+                "Login OAuth",
+                "Sistema de login. RN-01: usar OAuth 2.0.",
+                "gerador_cenarios_testes"
+        );
+        context = new WorkflowContext(request);
+        context.setRequisitos("RF001: Login");
+        context.setDecisoesReuniao("Usar OAuth 2.0");
+        context.setPlanoMacro("Testar login positivo e negativo");
+
+        String respostaIA = """
+                ---
+                Nome: Login com credenciais válidas
+                Objetivo: Validar login bem-sucedido
+                Passos:
+                Dado que o usuário está na tela de login
+                Quando ele informa credenciais válidas
+                Então o login é realizado com sucesso
+                Resultado esperado: Login realizado
+                Evidência: DOCUMENTED
+                Fontes: RN-01
+                ---
+                """;
+
+        CenarioItem cenario1 = new CenarioItem();
+        cenario1.setNome("Login com credenciais válidas");
+        cenario1.setObjetivo("Validar login bem-sucedido");
+        cenario1.setScriptTeste("Dado que o usuário está na tela de login\nQuando ele informa credenciais válidas\nEntão o login é realizado com sucesso");
+        cenario1.setStatus("APPROVED");
+        cenario1.setEvidenceType("DOCUMENTED");
+        cenario1.setEvidenceSources("RN-01");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn(respostaIA);
+        when(aiProvider.getName()).thenReturn("OpenAI");
+        when(cenarioTextoParser.parsear(respostaIA)).thenReturn(List.of(cenario1));
+        when(cenarioTextoParser.extrairCriterios(respostaIA)).thenReturn("Sistema deve permitir login");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenarios()).hasSize(1);
+        assertThat(context.getCenarios().get(0).getEvidenceType()).isEqualTo("DOCUMENTED");
+        assertThat(context.getCenarios().get(0).getStatus()).isEqualTo("APPROVED");
+    }
 }

@@ -72,6 +72,12 @@ public class GeneratedScenariosValidator {
                 return ValidationResult.invalido(
                         "Cenário '" + item.getNome() + "' não está em formato BDD: " + bddResult.motivo());
             }
+
+            ValidationResult evidenciaResult = validarEstruturaEvidencia(item);
+            if (!evidenciaResult.valido()) {
+                return ValidationResult.invalido(
+                        "Cenário '" + item.getNome() + "' com evidência estruturalmente inválida: " + evidenciaResult.motivo());
+            }
         }
 
         return ValidationResult.ok();
@@ -143,6 +149,78 @@ public class GeneratedScenariosValidator {
         return item != null
                 && !temTexto(item.getScriptTeste())
                 && !temTexto(item.getResultadoEsperado());
+    }
+
+    /**
+     * FASE15-BUG-005B: valida estruturalmente a rastreabilidade de evidência
+     * declarada pelo Generator. Cenários legados (evidenceType nulo/vazio)
+     * não possuem essa informação e não são invalidados por isso —
+     * retrocompatibilidade. Quando presente, evidenceType precisa ser um dos
+     * três valores conhecidos; EXPLORATORY exige Status=REVIEW_REQUIRED;
+     * DOCUMENTED/DIRECT_INFERENCE exigem evidenceSources preenchido.
+     */
+    public ValidationResult validarEstruturaEvidencia(CenarioItem item) {
+        String tipo = item.getEvidenceType();
+        if (!temTexto(tipo)) {
+            return ValidationResult.ok();
+        }
+
+        if (!tipo.equals("DOCUMENTED") && !tipo.equals("DIRECT_INFERENCE") && !tipo.equals("EXPLORATORY")) {
+            return ValidationResult.invalido("evidenceType desconhecido: '" + tipo + "'.");
+        }
+
+        if (tipo.equals("EXPLORATORY") && !"REVIEW_REQUIRED".equals(item.getStatus())) {
+            return ValidationResult.invalido("Cenário EXPLORATORY deve ter Status REVIEW_REQUIRED.");
+        }
+
+        if ((tipo.equals("DOCUMENTED") || tipo.equals("DIRECT_INFERENCE")) && !temTexto(item.getEvidenceSources())) {
+            return ValidationResult.invalido(tipo + " requer evidenceSources preenchido com uma fonte real.");
+        }
+
+        return ValidationResult.ok();
+    }
+
+    /**
+     * FASE15-BUG-005B: checagem determinística de existência literal de uma
+     * fonte citada no texto bruto de regraDeNegocio. "USER" é uma referência
+     * especial à regra digitada pelo usuário — validada pela existência de
+     * conteúdo de entrada, não por busca de string literal "USER".
+     */
+    public boolean fonteExisteNoTextoBruto(String fonte, String regraDeNegocioBruta) {
+        if (!temTexto(fonte)) {
+            return false;
+        }
+        String fonteTrim = fonte.trim();
+        if ("USER".equalsIgnoreCase(fonteTrim)) {
+            return temTexto(regraDeNegocioBruta);
+        }
+        return regraDeNegocioBruta != null && regraDeNegocioBruta.contains(fonteTrim);
+    }
+
+    /**
+     * FASE15-BUG-005B: correção determinística fail-closed — nunca deixar
+     * APPROVED + fonte inexistente. Se qualquer fonte citada não existir no
+     * texto bruto, rebaixa o item inteiro para EXPLORATORY/REVIEW_REQUIRED,
+     * sem disparar novo retry (correção pontual do item, não da geração).
+     */
+    public void corrigirSourceInexistente(CenarioItem item, String regraDeNegocioBruta) {
+        String tipo = item.getEvidenceType();
+        if (!"DOCUMENTED".equals(tipo) && !"DIRECT_INFERENCE".equals(tipo)) {
+            return;
+        }
+
+        String fontes = item.getEvidenceSources();
+        if (!temTexto(fontes)) {
+            return;
+        }
+
+        for (String parte : fontes.split(",")) {
+            if (!fonteExisteNoTextoBruto(parte.trim(), regraDeNegocioBruta)) {
+                item.setEvidenceType("EXPLORATORY");
+                item.setStatus("REVIEW_REQUIRED");
+                return;
+            }
+        }
     }
 
     private boolean temTexto(String valor) {

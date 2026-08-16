@@ -86,7 +86,18 @@ public class ZephyrFormatterAgent implements BaseAgent {
                 zephyr.append("**Resultado Esperado:**\n");
                 zephyr.append(item.getResultadoEsperado()).append("\n\n");
             }
-            
+
+            if (item.getEvidenceType() != null && !item.getEvidenceType().isBlank()) {
+                zephyr.append("**Tipo de Evidência:** ").append(item.getEvidenceType()).append("\n");
+                if (item.getEvidenceSources() != null && !item.getEvidenceSources().isBlank()) {
+                    zephyr.append("**Fontes:** ").append(item.getEvidenceSources()).append("\n");
+                }
+                if (item.getStatus() != null && !item.getStatus().isBlank()) {
+                    zephyr.append("**Status:** ").append(item.getStatus()).append("\n");
+                }
+                zephyr.append("\n");
+            }
+
             zephyr.append("---\n\n");
             contador++;
         }

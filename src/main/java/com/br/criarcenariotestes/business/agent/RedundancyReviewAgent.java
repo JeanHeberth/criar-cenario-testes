@@ -77,6 +77,7 @@ public class RedundancyReviewAgent implements BaseAgent {
                     return;
                 }
 
+                generatedScenariosValidator.corrigirSourceInexistente(item, context.getRequest().regraDeNegocio());
                 cenariosValidos.add(item);
             }
 
@@ -134,6 +135,64 @@ public class RedundancyReviewAgent implements BaseAgent {
             - Cada campo aparece uma única vez. Passos NÃO deve incorporar o texto de
               Resultado Esperado, Tipo, Prioridade ou Tags — essas informações continuam
               em seus próprios campos, nunca coladas ao final do último passo.
+
+            REGRA OBRIGATÓRIA DE STATUS EPISTÊMICO (FASE15-BUG-005) — você é a
+            segunda barreira contra comportamento sem suporte documental:
+            - Cada cenário recebido já vem com um Status (APPROVED ou REVIEW_REQUIRED)
+              definido pelo gerador. Você DEVE preservar esse Status na saída, salvo se
+              tiver certeza de que ele está errado.
+            - Se, ao consolidar, você perceber que um cenário afirma comportamento de
+              produto (ex.: "Então o sistema deve...") sem suporte na regra de negócio,
+              nos requisitos, nas decisões ou por inferência lógica direta defensável —
+              mesmo que ele tenha vindo como APPROVED — reclassifique-o: mude o Status
+              para REVIEW_REQUIRED, adicione aos Rótulos "exploratorio, ponto-a-validar",
+              e reescreva o Resultado Esperado/a linha "Então" para linguagem de ponto a
+              validar em vez de afirmação categórica.
+            - NÃO promova um cenário REVIEW_REQUIRED para APPROVED só por consolidação.
+            - NÃO apague cenários exploratórios legítimos — apenas preserve ou reforce a
+              classificação deles; eles continuam contando como cobertura útil.
+            - NÃO invente novos requisitos, nem novo comportamento de UI/produto que não
+              esteja nos cenários recebidos — sua função é consolidar e reclassificar,
+              nunca adicionar conteúdo novo.
+
+            REGRA OBRIGATÓRIA — O QUE VALIDAR vs. QUANDO/COMO VALIDAR (FASE15-BUG-005A):
+            - Uma regra que define O QUE validar (obrigatoriedade, formato, quantidade
+              de dígitos etc.) NÃO define automaticamente QUANDO ou COMO isso é validado.
+            - Para cada cenário APPROVED, pergunte-se: a fonte define explicitamente o
+              momento/interação da validação? Se o cenário afirmar comportamento como
+              "tempo real", "imediatamente", "durante a digitação"/"durante o
+              preenchimento", "onBlur"/"ao sair do campo", "onChange", ou "antes do
+              submit" (quando a fonte só define o resultado final, não o momento da
+              mensagem) SEM que a fonte defina esse timing explicitamente — reclassifique
+              para REVIEW_REQUIRED, adicione "exploratorio, ponto-a-validar" aos Rótulos,
+              e reescreva o Resultado Esperado em linguagem de ponto a validar.
+            - Se a fonte definir o timing explicitamente (ex.: "mensagem exibida
+              imediatamente ao sair do campo" está no requisito/regra), o cenário
+              correspondente permanece APPROVED normalmente — a regra é sobre ausência
+              de fonte para o timing, não sobre proibir esse comportamento quando
+              documentado.
+
+            REGRA OBRIGATÓRIA DE RASTREABILIDADE DE EVIDÊNCIA (FASE15-BUG-005B) —
+            você é a segunda barreira, agora sobre os campos Evidência/Fontes:
+            - Cada cenário recebido já vem com Evidência (DOCUMENTED, DIRECT_INFERENCE
+              ou EXPLORATORY) e Fontes definidos pelo gerador. A validação estrutural
+              (existência literal da fonte) já foi feita em código — sua responsabilidade
+              é a validação SEMÂNTICA: a fonte citada realmente sustenta o comportamento
+              afirmado no cenário, ou apenas existe no documento mas trata de outro
+              assunto?
+            - Exemplo: se a fonte RN-A-02 documenta apenas o formato/DDD do telefone,
+              ela NÃO sustenta um cenário que afirma "ocultar o campo CEP quando o DDD
+              for inválido" — mesmo citando um ID real, esse cenário não tem suporte
+              semântico. Reclassifique: Evidência: EXPLORATORY, Status: REVIEW_REQUIRED,
+              Fontes: Não se aplica.
+            - Cenário misto (menor certeza vence): se apenas parte do cenário tem
+              suporte semântico real, o cenário inteiro assume a classificação da parte
+              de menor certeza (EXPLORATORY/REVIEW_REQUIRED) — nunca aprovação parcial.
+            - NÃO promova Evidência de EXPLORATORY para DOCUMENTED ou DIRECT_INFERENCE
+              só por consolidação — a mesma regra de não promover REVIEW_REQUIRED para
+              APPROVED se aplica aqui.
+            - Em caso de dúvida sobre se a fonte sustenta semanticamente o
+              comportamento, prefira o lado conservador: EXPLORATORY/REVIEW_REQUIRED.
             """;
     }
     
@@ -155,18 +214,40 @@ public class RedundancyReviewAgent implements BaseAgent {
             if (item.getResultadoEsperado() != null) {
                 cenariosTexto.append("Resultado esperado: ").append(item.getResultadoEsperado()).append("\n");
             }
+            if (item.getRotulos() != null && !item.getRotulos().isBlank()) {
+                cenariosTexto.append("Rótulos: ").append(item.getRotulos()).append("\n");
+            }
+            if (item.getStatus() != null && !item.getStatus().isBlank()) {
+                cenariosTexto.append("Status: ").append(item.getStatus()).append("\n");
+            }
+            if (item.getEvidenceType() != null && !item.getEvidenceType().isBlank()) {
+                cenariosTexto.append("Evidência: ").append(item.getEvidenceType()).append("\n");
+            }
+            if (item.getEvidenceSources() != null && !item.getEvidenceSources().isBlank()) {
+                cenariosTexto.append("Fontes: ").append(item.getEvidenceSources()).append("\n");
+            }
             cenariosTexto.append("---\n\n");
         }
-        
+
+        String regraDeNegocio = context.getRequest().regraDeNegocio() != null
+                ? context.getRequest().regraDeNegocio()
+                : "";
+
         return String.format("""
             Revise os seguintes casos de teste e remova redundâncias:
-            
+
             %s
-            
+
+            Contexto documental bruto disponível (use para checar semanticamente se as
+            Fontes citadas nos cenários realmente sustentam o comportamento afirmado):
+
+            %s
+
             Retorne os cenários otimizados mantendo o mesmo formato.
             Sugira variáveis quando houver padrões repetitivos.
             """,
-            cenariosTexto.toString()
+            cenariosTexto.toString(),
+            regraDeNegocio
         );
     }
 }
