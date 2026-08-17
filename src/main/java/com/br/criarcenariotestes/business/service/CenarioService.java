@@ -213,6 +213,16 @@ public class CenarioService {
             String agent,
             List<MultipartFile> arquivos
     ) {
+        return gerarCenarioComPdf(titulo, regra, agent, null, arquivos);
+    }
+
+    public CenarioResponse gerarCenarioComPdf(
+            String titulo,
+            String regra,
+            String agent,
+            String taskRef,
+            List<MultipartFile> arquivos
+    ) {
         log.info("Processando PDFs para contexto. titulo='{}', arquivos={}", titulo, arquivos.size());
 
         StringBuilder contextoCompleto = new StringBuilder();
@@ -232,7 +242,8 @@ public class CenarioService {
         }
 
         String regraComContexto = regra + "\n\n" + contextoCompleto.toString();
-        CenarioRequest request = new CenarioRequest(titulo, regraComContexto, agent);
+        CenarioRequest request = new CenarioRequest(titulo, regraComContexto, agent,
+                com.br.criarcenariotestes.business.workflow.WorkflowType.COMPLETO, taskRef);
 
         try {
             return qaWorkflowService.executarWorkflow(request);

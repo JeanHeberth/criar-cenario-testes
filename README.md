@@ -122,6 +122,130 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ---
 
+## 🎯 Para onde os casos de teste vão (roteamento)
+
+O destino da publicação é **dado do pedido**, não configuração de ambiente —
+é o que permite vários times na mesma instância, cada um publicando no seu
+projeto.
+
+| Campo (JSON) | O que é | Quando ausente |
+| --- | --- | --- |
+| `taskRef` | URL da tarefa (ou chave do Jira) a que os casos serão vinculados | Publica sem vínculo |
+| `projectKey` | Projeto de destino no Zephyr | Derivado da `taskRef`; senão `ZEPHYR_PROJECT_KEY` |
+| `pastaDestino` | Pasta raiz, tipicamente a stack (`Java`, `Robot`) | `ZEPHYR_ROOT_FOLDER` |
+
+```jsonc
+{
+  "titulo": "Adicionar produto ao carrinho",
+  "regraDeNegocio": "...",
+  "agent": "gerador_cenarios_testes",
+  // Cole a URL do navegador — é a entrada canônica
+  "taskRef": "https://empresa.atlassian.net/browse/PAY-77"
+}
+```
+
+**Por que a URL, e não a chave.** No Jira a chave carrega o projeto
+(`PAY-77` → `PAY`). No Azure DevOps o work item é um id numérico global
+(`1234`) que não diz organização nem projeto — só a URL carrega isso. A URL é
+a única representação autossuficiente nos dois, e o **provedor é detectado
+dela**, não configurado por ambiente. Ver `ReferenciaTarefaParser`.
+
+Formatos aceitos:
+
+- `https://empresa.atlassian.net/browse/SCRUM-28`
+- `https://empresa.atlassian.net/jira/software/projects/SCRUM/boards/1?selectedIssue=SCRUM-28`
+- `https://dev.azure.com/{org}/{projeto}/_workitems/edit/1234`
+- `https://{org}.visualstudio.com/{projeto}/_workitems/edit/1234`
+- `SCRUM-28` (chave pura, formato aceito antes)
+
+**Estado do suporte a Azure DevOps:** o roteamento entende a URL, mas o
+*vínculo* ainda é só Jira — a API do Zephyr Scale é addon do Jira e não aceita
+work item. Uma referência do Azure publica os casos normalmente e registra um
+aviso no log. Vincular do lado do Azure exigiria um adaptador de Azure Test
+Plans, ainda não implementado.
+
+**Derivar `projectKey` da chave é heurística** e vale só para Jira. Times com
+um projeto Jira guarda-chuva e o Zephyr em outro lugar devem informar
+`projectKey` explicitamente — ele tem precedência.
+
+### Derivar a pasta da tarefa (`folder-strategy`)
+
+Em vez de configurar a pasta por ambiente ou informá-la em cada pedido, ela
+pode sair de um campo que o time **já mantém** no rastreador:
+
+```yaml
+zephyr:
+  folder-strategy:
+    enabled: true
+    sources: [components, labels]   # ordem de precedência
+    mapping:                        # mapa FECHADO termo -> pasta
+      java: Java
+      postman: Postman
+      robot: Robot
+```
+
+Precedência final da pasta raiz: `pastaDestino` do pedido → derivada da tarefa
+→ `ZEPHYR_ROOT_FOLDER`.
+
+**Por que regra declarada e não inferência da IA.** A stack não está no
+requisito — é decisão do time sobre a automação, não propriedade da regra de
+negócio. Pedir para o modelo adivinhar produziria pastas variando entre
+gerações (`Login`, `Autenticação`, `Auth`), o que quebra a deduplicação
+(escopada por `folderId`) e cria lixo permanente, já que pasta no Zephyr não
+tem `DELETE`. Aqui a mesma tarefa sempre resolve para a mesma pasta, e a
+resposta para "por que este caso foi parar aqui" é esta configuração.
+
+**O mapa é fechado de propósito:** um valor que não está nele não vira pasta
+nova — cai no destino padrão. É essa salvaguarda que limita o estrago de um
+campo preenchido fora do padrão.
+
+**Sobre `summary`:** funciona (`Automacao POSTMAN do POST Usuario` → `Postman`,
+casando palavra inteira, então `javascript` não vira `Java`), mas é frágil —
+depende de convenção de escrita. Trate como degrau de migração para projetos
+que ainda não preenchem campo estruturado, não como destino. Num Jira
+corporativo bem mantido, use `components`.
+
+Hoje só lê do Jira: ler campos de work item do Azure DevOps exigiria o
+adaptador ainda não implementado, e uma referência do Azure simplesmente não
+deriva pasta.
+
+---
+
+### Governança: quem pode criar pasta
+
+```yaml
+zephyr:
+  allow-folder-creation: ${ZEPHYR_ALLOW_FOLDER_CREATION:true}
+```
+
+Com `false`, a publicação só deposita em pastas que **já existem**; um caminho
+inexistente falha aquele cenário dizendo qual era o esperado, e os demais
+seguem. Quem define a taxonomia volta a ser o dono do board — o gerador só
+deposita.
+
+Isso existe porque o estrago de errar é assimétrico e **permanente**: a API do
+Zephyr não expõe remoção de pasta (`DELETE /folders` responde **405**), então
+cada pasta criada por engano vira limpeza manual pela interface. Em time
+grande, onde cada squad traz sua convenção, criação livre multiplica variações
+da mesma pasta (`Login`, `Autenticação`, `Auth`) e quebra a deduplicação, que
+é escopada por `folderId`.
+
+O default é `true` para não mudar o comportamento de quem já usa. **Times com
+taxonomia governada devem ligar em `false`.**
+
+Note a distinção deliberada: pasta inexistente com criação desligada **falha o
+item**, enquanto instabilidade de rede ao resolver pasta continua caindo para
+publicação sem pasta. Perder o caso por causa de rede seria pior que criá-lo
+solto; criá-lo solto quando a política diz o contrário é exatamente o que se
+quer evitar.
+
+**Retrocompatibilidade:** `jiraIssueKey` e `pastaRaiz` continuam aceitos como
+alias de `taskRef` e `pastaDestino`. Os nomes novos são neutros porque este é
+contrato público consumido por front, Jenkins e testes: renomear depois, com
+um time já usando Azure, custaria coordenar todos eles.
+
+---
+
 ## 📊 Estrutura de Pastas
 
 ```

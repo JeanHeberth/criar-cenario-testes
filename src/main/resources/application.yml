@@ -65,6 +65,24 @@ zephyr:
   default-priority-name: ${ZEPHYR_DEFAULT_PRIORITY:Normal}
   default-execution-status-name: ${ZEPHYR_DEFAULT_EXECUTION_STATUS:Not Executed}
   root-folder: ${ZEPHYR_ROOT_FOLDER:}
+  allow-folder-creation: ${ZEPHYR_ALLOW_FOLDER_CREATION:true}
+
+  # Deriva a pasta de destino de um campo da tarefa, em vez de config fixa.
+  # Desligada por padrão: sem ligar, nada muda. Ver README.
+  folder-strategy:
+    enabled: ${ZEPHYR_FOLDER_STRATEGY_ENABLED:false}
+    # Ordem de precedência. "components" é a fonte natural num Jira
+    # corporativo; "summary" é degrau de migração para projetos que ainda
+    # escrevem a stack no título e não preenchem campo estruturado.
+    sources:
+      - components
+      - labels
+    # Mapa FECHADO termo -> pasta: o que não está aqui não vira pasta nova,
+    # cai no destino padrão. Comparação ignora caixa e acento.
+    mapping:
+      java: Java
+      postman: Postman
+      robot: Robot
 
 logging:
   level:
