@@ -591,4 +591,191 @@ class GeneratedScenariosValidatorTest {
         assertThat(item.getEvidenceType()).isEqualTo("EXPLORATORY");
         assertThat(item.getStatus()).isEqualTo("REVIEW_REQUIRED");
     }
+
+    // ===== FASE15-BUG-005B (continuação): fontes derivadas RF/RNF válidas do RequirementAnalysisAgent =====
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: RF presente nos requisitos derivados da execução deve ser aceita")
+    void fonteExisteNoTextoBrutoDeveAceitarRfPresenteNosRequisitosDerivados() {
+        String bruto = "RN-A-01: telefone obrigatório.";
+        String requisitos = "Requisitos Funcionais:\nRF01: cliente informa telefone celular\nRF02: cliente aceita termos";
+
+        assertThat(validator.fonteExisteNoTextoBruto("RF01", bruto, requisitos)).isTrue();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: RNF presente nos requisitos derivados da execução deve ser aceita")
+    void fonteExisteNoTextoBrutoDeveAceitarRnfPresenteNosRequisitosDerivados() {
+        String bruto = "RN-A-01: telefone obrigatório.";
+        String requisitos = "Requisitos Não-Funcionais:\nRNF01: validação deve ser auditável";
+
+        assertThat(validator.fonteExisteNoTextoBruto("RNF01", bruto, requisitos)).isTrue();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: RF ausente dos requisitos derivados desta execução deve ser rejeitada (não aceitar só pelo formato RF\\d+)")
+    void fonteExisteNoTextoBrutoDeveRejeitarRfAusenteDosRequisitosDerivados() {
+        String bruto = "RN-A-01: telefone obrigatório.";
+        String requisitos = "Requisitos Funcionais:\nRF01: cliente informa telefone celular\nRF02: cliente aceita termos";
+
+        assertThat(validator.fonteExisteNoTextoBruto("RF99", bruto, requisitos)).isFalse();
+        // formato sintaticamente válido (RF\d+), mas inexistente nos requisitos desta execução
+        assertThat(validator.fonteExisteNoTextoBruto("RF9999", bruto, requisitos)).isFalse();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: RNF ausente dos requisitos derivados desta execução deve ser rejeitada")
+    void fonteExisteNoTextoBrutoDeveRejeitarRnfAusenteDosRequisitosDerivados() {
+        String bruto = "RN-A-01: telefone obrigatório.";
+        String requisitos = "Requisitos Não-Funcionais:\nRNF01: validação deve ser auditável";
+
+        assertThat(validator.fonteExisteNoTextoBruto("RNF99", bruto, requisitos)).isFalse();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: overload de 2 argumentos continua funcionando (retrocompatibilidade, sem requisitos derivados)")
+    void fonteExisteNoTextoBrutoOverloadDeDoisArgumentosContinuaFuncionando() {
+        String bruto = "RN-A-01: telefone obrigatório.";
+
+        assertThat(validator.fonteExisteNoTextoBruto("RN-A-01", bruto)).isTrue();
+        assertThat(validator.fonteExisteNoTextoBruto("RF01", bruto)).isFalse();
+    }
+
+    @Test
+    @DisplayName("fonteExisteNoTextoBruto: isolamento entre execuções — RF só é válida nos requisitos DESTA chamada, não de outra execução")
+    void fonteExisteNoTextoBrutoNaoDeveVazarRequisitosDeOutraExecucao() {
+        String requisitosExecucaoA = "RF01: cliente informa telefone celular";
+        String requisitosExecucaoB = "RF01: cliente informa telefone celular\nRF02: cliente informa CEP";
+
+        // RF02 existe nos requisitos da execução B, mas NÃO nos da execução A
+        assertThat(validator.fonteExisteNoTextoBruto("RF02", "", requisitosExecucaoA)).isFalse();
+        assertThat(validator.fonteExisteNoTextoBruto("RF02", "", requisitosExecucaoB)).isTrue();
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: DOCUMENTED citando apenas RF válido (presente nos requisitos derivados) NÃO deve ser rebaixado")
+    void corrigirSourceInexistenteNaoDeveRebaixarQuandoRfExisteNosRequisitosDerivados() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro com telefone celular informado");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RF01");
+
+        validator.corrigirSourceInexistente(item, "RN-A-01: telefone obrigatório.",
+                "Requisitos Funcionais:\nRF01: cliente informa telefone celular");
+
+        assertThat(item.getEvidenceType()).isEqualTo("DOCUMENTED");
+        assertThat(item.getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: source mista válida (ID documental real + RF derivado real) NÃO deve ser rebaixada")
+    void corrigirSourceInexistenteNaoDeveRebaixarSourceMistaValida() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro completo com telefone e CEP válidos");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RN-A-01, RF01");
+
+        validator.corrigirSourceInexistente(item, "RN-A-01: telefone obrigatório.",
+                "Requisitos Funcionais:\nRF01: cliente informa telefone celular");
+
+        assertThat(item.getEvidenceType()).isEqualTo("DOCUMENTED");
+        assertThat(item.getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: DOCUMENTED citando RF inventado (ausente dos requisitos derivados) deve ser rebaixado")
+    void corrigirSourceInexistenteDeveRebaixarQuandoRfNaoExisteNosRequisitosDerivados() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro com comportamento não documentado");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RF99");
+
+        validator.corrigirSourceInexistente(item, "RN-A-01: telefone obrigatório.",
+                "Requisitos Funcionais:\nRF01: cliente informa telefone celular\nRF02: cliente aceita termos");
+
+        assertThat(item.getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(item.getStatus()).isEqualTo("REVIEW_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: mistura com uma fonte inválida entre válidas (documental real + RF real + RF inventado) deve rebaixar (fail-closed)")
+    void corrigirSourceInexistenteDeveRebaixarQuandoUmaDasFontesMistasNaoExiste() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro combinando múltiplas fontes, uma inventada");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RN-A-01, RF01, RF99");
+
+        validator.corrigirSourceInexistente(item, "RN-A-01: telefone obrigatório.",
+                "Requisitos Funcionais:\nRF01: cliente informa telefone celular");
+
+        assertThat(item.getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(item.getStatus()).isEqualTo("REVIEW_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("corrigirSourceInexistente: overload de 2 argumentos continua funcionando (retrocompatibilidade, sem requisitos derivados)")
+    void corrigirSourceInexistenteOverloadDeDoisArgumentosContinuaFuncionando() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cadastro com CEP inválido");
+        item.setEvidenceType("DOCUMENTED");
+        item.setStatus("APPROVED");
+        item.setEvidenceSources("RN-B-02");
+
+        validator.corrigirSourceInexistente(item, "RN-B-02: CEP deve possuir exatamente 8 dígitos.");
+
+        assertThat(item.getEvidenceType()).isEqualTo("DOCUMENTED");
+        assertThat(item.getStatus()).isEqualTo("APPROVED");
+    }
+
+    // ===== FASE15-BUG-003C: indentação antes da keyword BDD =====
+
+    @Test
+    @DisplayName("FASE15-BUG-003C: deve aceitar BDD íntegro cujas linhas seguintes vêm indentadas")
+    void deveAceitarBddComLinhasIndentadas() {
+        // Formato real observado com gemini-2.5-flash: só a 1ª linha na
+        // margem, as demais com 2 espaços. Antes da correção isso dava
+        // Dado=true, Quando=false, Então=false e reprovava um cenário válido.
+        String passosIndentados = "Dado que o usuário está na página de login\n"
+                + "  Quando ele informa o e-mail \"teste@example.com\" no campo de e-mail\n"
+                + "  E informa a senha \"Senha123!\" no campo de senha\n"
+                + "  Então o sistema deve autenticar o usuário com sucesso";
+
+        assertThat(validator.validarEstruturaBdd(passosIndentados).valido()).isTrue();
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003C: deve aceitar indentação com tabulação")
+    void deveAceitarBddComTabulacao() {
+        String passosComTab = "Dado que o usuário está autenticado\n"
+                + "\tQuando ele acessa o extrato\n"
+                + "\tEntão o saldo é exibido";
+
+        assertThat(validator.validarEstruturaBdd(passosComTab).valido()).isTrue();
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003C: validação final também deve aceitar Passos indentados")
+    void validacaoFinalDeveAceitarPassosIndentados() {
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login bem-sucedido");
+        item.setScriptTeste("Dado que o usuário está na página de login\n"
+                + "  Quando ele informa credenciais válidas");
+        item.setResultadoEsperado("Então o acesso é concedido");
+
+        assertThat(validator.validarRepresentacaoFinal(item).valido()).isTrue();
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-003C: bullets antes da keyword continuam recusados (restrição deliberada)")
+    void deveContinuarRecusandoBulletsAntesDaKeyword() {
+        String passosComBullet = "Dado que o usuário está na página de login\n"
+                + "- Quando ele informa credenciais válidas\n"
+                + "- Então o acesso é concedido";
+
+        assertThat(validator.validarEstruturaBdd(passosComBullet).valido()).isFalse();
+    }
 }

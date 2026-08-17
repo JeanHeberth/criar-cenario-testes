@@ -17,11 +17,6 @@ server:
     include-message: always
     include-exception: true
 
-# CORS é infraestrutura global da aplicação (afeta Auto QA, Agent/Chat IA,
-# Jira e Cenários via CorsConfig), por isso vive em "app", não em "auto-qa".
-# Default vazio = fail-closed (nenhuma origem cross-origin autorizada) até
-# que o ambiente configure explicitamente, ex.:
-# APP_CORS_ALLOWED_ORIGINS=http://localhost:4200,http://100.83.72.100:9999
 app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
@@ -30,8 +25,8 @@ agents:
   directory: ${AGENTS_DIRECTORY:}
 
 ai:
-  active-provider: openai
-  fallback-provider: gemini
+  active-provider: ${AI_ACTIVE_PROVIDER:openai}
+  fallback-provider: ${AI_FALLBACK_PROVIDER:gemini}
 
   openai:
     api-key: ${OPENAI_API_KEY}
@@ -44,6 +39,16 @@ ai:
     model: gemini-2.5-flash
     url: https://generativelanguage.googleapis.com/v1beta/models
     max-tokens: 4000
+    disable-thinking: ${GEMINI_DISABLE_THINKING:true}
+
+  claude:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${CLAUDE_MODEL:claude-opus-5}
+    max-tokens: ${CLAUDE_MAX_TOKENS:16000}
+    effort: ${CLAUDE_EFFORT:medium}
+    thinking-enabled: ${CLAUDE_THINKING_ENABLED:true}
+    thinking-headroom-tokens: ${CLAUDE_THINKING_HEADROOM_TOKENS:8000}
+    timeout-seconds: ${CLAUDE_TIMEOUT_SECONDS:600}
 
 jira:
   base-url: ${JIRA_BASE_URL:}
@@ -51,10 +56,6 @@ jira:
   api-token: ${JIRA_API_TOKEN:}
   issue-endpoint: /rest/api/3/issue
 
-# Publicação real dos cenários gerados como casos de teste no Zephyr Scale
-# Cloud. Desabilitado por padrão (fail-closed, mesmo padrão de app.cors e
-# auto-qa.allow-command-execution) - o ZephyrPublisherAgent só roda quando
-# zephyr.enabled=true E as credenciais abaixo estiverem configuradas.
 zephyr:
   enabled: ${ZEPHYR_ENABLED:false}
   base-url: ${ZEPHYR_BASE_URL:https://api.zephyrscale.smartbear.com/v2}
@@ -62,6 +63,8 @@ zephyr:
   project-key: ${ZEPHYR_PROJECT_KEY:}
   default-status-name: ${ZEPHYR_DEFAULT_STATUS:Draft}
   default-priority-name: ${ZEPHYR_DEFAULT_PRIORITY:Normal}
+  default-execution-status-name: ${ZEPHYR_DEFAULT_EXECUTION_STATUS:Not Executed}
+  root-folder: ${ZEPHYR_ROOT_FOLDER:}
 
 logging:
   level:

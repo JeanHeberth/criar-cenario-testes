@@ -77,7 +77,8 @@ public class RedundancyReviewAgent implements BaseAgent {
                     return;
                 }
 
-                generatedScenariosValidator.corrigirSourceInexistente(item, context.getRequest().regraDeNegocio());
+                generatedScenariosValidator.corrigirSourceInexistente(
+                        item, context.getRequest().regraDeNegocio(), context.getRequisitos());
                 cenariosValidos.add(item);
             }
 
