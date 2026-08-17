@@ -84,6 +84,44 @@ CI/CD:     Jenkins + GitHub Actions
 
 ---
 
+## 🧠 Providers de IA
+
+Os agentes BMAD não falam com um modelo específico: eles resolvem o provider
+ativo pelo `AiProviderResolver`. Trocar de modelo é trocar variável de ambiente,
+sem alterar código de agente.
+
+| Provider | `AI_ACTIVE_PROVIDER` | Chave                | Modelo padrão      |
+| -------- | -------------------- | -------------------- | ------------------ |
+| OpenAI   | `openai`             | `OPENAI_API_KEY`     | `gpt-4.1`          |
+| Gemini   | `gemini`             | `GEMINI_API_KEY`     | `gemini-2.5-flash` |
+| Claude   | `claude`             | `ANTHROPIC_API_KEY`  | `claude-opus-5`    |
+
+```bash
+# .env — usar Claude
+AI_ACTIVE_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Notas sobre o Claude** (`ClaudeProvider`, via SDK oficial `com.anthropic:anthropic-java`):
+
+- **`CLAUDE_EFFORT`** (`low|medium|high|xhigh|max`, padrão `medium`) é o controle
+  de custo/profundidade. Geração de cenário é formatação estruturada, não
+  raciocínio longo — `medium` entrega a mesma qualidade com bem menos tokens que
+  o padrão `high` da API.
+- **Thinking fica ligado** (`CLAUDE_THINKING_ENABLED=true`). Desligar seria o
+  análogo do que fizemos no Gemini, mas no Claude tem efeito colateral conhecido:
+  o modelo pode vazar tags `<thinking>` no texto visível, e o `CenarioTextoParser`
+  quebraria com isso.
+- **`CLAUDE_THINKING_HEADROOM_TOKENS`** (padrão `8000`): no Claude o raciocínio
+  divide o mesmo teto de `max_tokens` com o texto final. Essa folga é somada ao
+  limite pedido pelo chamador — sem ela, o override de 8000 tokens do
+  `TestScenarioAgent` pode ser consumido pelo raciocínio e devolver cenários
+  truncados no meio, reprovando na validação BDD.
+- Recusa por política chega como HTTP 200 com `stop_reason=refusal`; o provider
+  trata isso explicitamente para não mascarar como "resposta vazia".
+
+---
+
 ## 📊 Estrutura de Pastas
 
 ```

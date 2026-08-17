@@ -68,8 +68,9 @@ public class TestScenarioAgent implements BaseAgent {
             String criterios = cenarioTextoParser.extrairCriterios(respostaIa);
 
             String regraDeNegocioBruta = context.getRequest().regraDeNegocio();
+            String requisitosDerivados = context.getRequisitos();
             for (CenarioItem item : cenarios) {
-                generatedScenariosValidator.corrigirSourceInexistente(item, regraDeNegocioBruta);
+                generatedScenariosValidator.corrigirSourceInexistente(item, regraDeNegocioBruta, requisitosDerivados);
             }
 
             context.setCenarios(cenarios);

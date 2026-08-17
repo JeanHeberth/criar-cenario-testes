@@ -28,7 +28,17 @@ public class GeneratedScenariosValidator {
      * positivo é a keyword exigir inicial maiúscula com `\b` — "quando(" em
      * minúsculo colado a um parêntese (ex.: chamada de função) nunca casa.
      */
-    private static final String INICIO_DE_PASSO = "(?:^|\\n|(?<=[.;:)])\\s+)";
+    /**
+     * FASE15-BUG-003C: o sufixo "[ \t]*" tolera INDENTAÇÃO antes da keyword.
+     * Sem ele, um cenário BDD íntegro era reprovado só porque o modelo
+     * indentou as linhas seguintes à primeira (observado com gemini-2.5-flash:
+     * "Dado ...\n  Quando ...\n  Então ..." dava Dado=true, Quando=false,
+     * Então=false). Indentação é whitespace insignificante e não muda a
+     * semântica do passo. Bullets ("- ", "* ") e passos numerados continuam
+     * NÃO aceitos de propósito - essa restrição é deliberada (FASE15-BUG-003)
+     * e segue valendo, porque aí muda a estrutura, não só o recuo.
+     */
+    private static final String INICIO_DE_PASSO = "(?:^|\\n|(?<=[.;:)])\\s+)[ \\t]*";
     private static final Pattern KEYWORD_DADO =
             Pattern.compile(INICIO_DE_PASSO + "(?:Dado que|Dado)\\b");
     private static final Pattern KEYWORD_QUANDO =
@@ -187,6 +197,19 @@ public class GeneratedScenariosValidator {
      * conteúdo de entrada, não por busca de string literal "USER".
      */
     public boolean fonteExisteNoTextoBruto(String fonte, String regraDeNegocioBruta) {
+        return fonteExisteNoTextoBruto(fonte, regraDeNegocioBruta, null);
+    }
+
+    /**
+     * FASE15-BUG-005B (continuação — correção do rebaixamento excessivo de
+     * fontes RF/RNF): além do texto documental bruto, reconhece como
+     * existente uma fonte citada literalmente nos requisitos derivados
+     * (RF/RNF) produzidos pelo RequirementAnalysisAgent PARA ESTA MESMA
+     * EXECUÇÃO — nunca de um catálogo global ou de outra execução. Não
+     * aceita nada apenas pelo formato (ex.: "RF\d+"); exige presença
+     * literal no texto de requisitos realmente gerado.
+     */
+    public boolean fonteExisteNoTextoBruto(String fonte, String regraDeNegocioBruta, String requisitosDerivados) {
         if (!temTexto(fonte)) {
             return false;
         }
@@ -194,7 +217,10 @@ public class GeneratedScenariosValidator {
         if ("USER".equalsIgnoreCase(fonteTrim)) {
             return temTexto(regraDeNegocioBruta);
         }
-        return regraDeNegocioBruta != null && regraDeNegocioBruta.contains(fonteTrim);
+        if (regraDeNegocioBruta != null && regraDeNegocioBruta.contains(fonteTrim)) {
+            return true;
+        }
+        return requisitosDerivados != null && requisitosDerivados.contains(fonteTrim);
     }
 
     /**
@@ -204,6 +230,15 @@ public class GeneratedScenariosValidator {
      * sem disparar novo retry (correção pontual do item, não da geração).
      */
     public void corrigirSourceInexistente(CenarioItem item, String regraDeNegocioBruta) {
+        corrigirSourceInexistente(item, regraDeNegocioBruta, null);
+    }
+
+    /**
+     * FASE15-BUG-005B (continuação): mesma correção fail-closed, agora
+     * também aceitando fontes RF/RNF presentes nos requisitos derivados
+     * desta execução (ver {@link #fonteExisteNoTextoBruto(String, String, String)}).
+     */
+    public void corrigirSourceInexistente(CenarioItem item, String regraDeNegocioBruta, String requisitosDerivados) {
         String tipo = item.getEvidenceType();
         if (!"DOCUMENTED".equals(tipo) && !"DIRECT_INFERENCE".equals(tipo)) {
             return;
@@ -215,7 +250,7 @@ public class GeneratedScenariosValidator {
         }
 
         for (String parte : fontes.split(",")) {
-            if (!fonteExisteNoTextoBruto(parte.trim(), regraDeNegocioBruta)) {
+            if (!fonteExisteNoTextoBruto(parte.trim(), regraDeNegocioBruta, requisitosDerivados)) {
                 item.setEvidenceType("EXPLORATORY");
                 item.setStatus("REVIEW_REQUIRED");
                 return;

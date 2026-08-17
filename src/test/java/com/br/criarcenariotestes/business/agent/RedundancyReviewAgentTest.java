@@ -567,4 +567,80 @@ class RedundancyReviewAgentTest {
         assertThat(resultado.getEvidenceType()).isEqualTo("EXPLORATORY");
         assertThat(resultado.getStatus()).isEqualTo("REVIEW_REQUIRED");
     }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B (continuação): não deve rebaixar item pós-revisão citando RF presente nos requisitos derivados desta execução")
+    void naoDeveRebaixarItemPosRevisaoComRfPresenteNosRequisitosDerivados() {
+        // Arrange
+        CenarioRequest request = new CenarioRequest(
+                "Cadastro de cliente",
+                "Sistema de cadastro. RN-A-01: telefone celular obrigatório.",
+                "gerador_cenarios_testes"
+        );
+        context = new WorkflowContext(request, WorkflowType.COMPLETO);
+        context.setRequisitos("Requisitos Funcionais:\nRF01: cliente informa telefone celular");
+        CenarioItem cenarioOriginal = new CenarioItem();
+        cenarioOriginal.setNome("Cadastro com telefone celular informado");
+        cenarioOriginal.setScriptTeste("Dado...\nQuando...\nEntão...");
+        context.setCenarios(List.of(cenarioOriginal));
+
+        String respostaRevisada = "---\nNome: CT001\n---";
+        CenarioItem cenarioRevisado = new CenarioItem();
+        cenarioRevisado.setNome("CT001");
+        cenarioRevisado.setScriptTeste("Dado...\nQuando...\nEntão...");
+        cenarioRevisado.setStatus("APPROVED");
+        cenarioRevisado.setEvidenceType("DOCUMENTED");
+        cenarioRevisado.setEvidenceSources("RN-A-01, RF01");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(cenarioRevisado));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenariosRevisados()).hasSize(1);
+        CenarioItem resultado = context.getCenariosRevisados().get(0);
+        assertThat(resultado.getEvidenceType()).isEqualTo("DOCUMENTED");
+        assertThat(resultado.getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B (continuação): deve rebaixar item pós-revisão citando RF inventado (ausente dos requisitos derivados desta execução)")
+    void deveRebaixarItemPosRevisaoComRfInventado() {
+        // Arrange
+        CenarioRequest request = new CenarioRequest(
+                "Cadastro de cliente",
+                "Sistema de cadastro. RN-A-01: telefone celular obrigatório.",
+                "gerador_cenarios_testes"
+        );
+        context = new WorkflowContext(request, WorkflowType.COMPLETO);
+        context.setRequisitos("Requisitos Funcionais:\nRF01: cliente informa telefone celular");
+        CenarioItem cenarioOriginal = new CenarioItem();
+        cenarioOriginal.setNome("Cadastro com comportamento não documentado");
+        cenarioOriginal.setScriptTeste("Dado...\nQuando...\nEntão...");
+        context.setCenarios(List.of(cenarioOriginal));
+
+        String respostaRevisada = "---\nNome: CT001\n---";
+        CenarioItem cenarioRevisado = new CenarioItem();
+        cenarioRevisado.setNome("CT001");
+        cenarioRevisado.setScriptTeste("Dado...\nQuando...\nEntão...");
+        cenarioRevisado.setStatus("APPROVED");
+        cenarioRevisado.setEvidenceType("DOCUMENTED");
+        cenarioRevisado.setEvidenceSources("RF99");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString())).thenReturn(respostaRevisada);
+        when(cenarioTextoParser.parsear(respostaRevisada)).thenReturn(List.of(cenarioRevisado));
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenariosRevisados()).hasSize(1);
+        CenarioItem resultado = context.getCenariosRevisados().get(0);
+        assertThat(resultado.getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(resultado.getStatus()).isEqualTo("REVIEW_REQUIRED");
+    }
 }

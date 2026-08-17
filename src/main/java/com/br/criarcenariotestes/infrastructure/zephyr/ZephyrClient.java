@@ -167,62 +167,94 @@ public class ZephyrClient {
     }
 
     /**
-     * Resolve o id de uma pasta de casos de teste pelo nome, criando-a no
-     * Zephyr se ainda não existir. Cacheável pelo chamador (uma pasta por
-     * nome, não por item) — cada chamada aqui bate na API do Zephyr.
+     * Resolve o id de uma pasta de casos de teste a partir de um CAMINHO
+     * hierárquico ("Java/Login"), criando cada nível que ainda não existir.
+     * Um nome simples ("Login") continua funcionando como caminho de um
+     * nível só. A busca por nível considera o parentId, então "Java/Login" e
+     * "Robot/Login" resolvem para pastas distintas mesmo tendo folhas
+     * homônimas. Cacheável pelo chamador (uma vez por caminho, não por item).
      */
-    public Long resolverOuCriarFolder(String nomePasta) {
+    public Long resolverOuCriarFolder(String caminhoPasta) {
         validarConfiguracao();
 
-        if (isBlank(nomePasta)) {
+        if (isBlank(caminhoPasta)) {
             return null;
         }
 
-        Long existente = buscarFolderExistente(nomePasta);
-        if (existente != null) {
-            return existente;
+        List<Map<String, Object>> todasAsPastas = listarTodasAsPastas();
+
+        Long parentId = null;
+        for (String nivel : caminhoPasta.split("/")) {
+            String nome = nivel.trim();
+            if (nome.isEmpty()) {
+                continue;
+            }
+
+            Long existente = buscarFolderNoNivel(todasAsPastas, nome, parentId);
+            parentId = existente != null ? existente : criarFolder(nome, parentId);
         }
 
-        return criarFolder(nomePasta);
+        return parentId;
     }
 
     @SuppressWarnings("unchecked")
-    private Long buscarFolderExistente(String nomePasta) {
+    private List<Map<String, Object>> listarTodasAsPastas() {
         HttpHeaders headers = criarHeaders();
         String url = baseUrl() + "/folders?projectKey=" + zephyrProperties.getProjectKey()
-                + "&folderType=TEST_CASE&maxResults=50";
+                + "&folderType=TEST_CASE&maxResults=100";
+
+        List<Map<String, Object>> todas = new ArrayList<>();
 
         while (url != null) {
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
             Map<String, Object> body = response.getBody();
             if (body == null) {
-                return null;
+                break;
             }
 
             List<Map<String, Object>> valores = (List<Map<String, Object>>) body.get("values");
             if (valores != null) {
-                for (Map<String, Object> pasta : valores) {
-                    if (nomePasta.equalsIgnoreCase(String.valueOf(pasta.get("name")))) {
-                        Object id = pasta.get("id");
-                        return id == null ? null : Long.valueOf(id.toString());
-                    }
-                }
+                todas.addAll(valores);
             }
 
             Object proxima = body.get("next");
             url = proxima == null ? null : proxima.toString();
         }
 
+        return todas;
+    }
+
+    /**
+     * Compara nome E parentId: sem o parentId, "Java/Login" acharia uma
+     * "Login" solta na raiz (ou dentro de "Robot") e aninharia errado.
+     */
+    private Long buscarFolderNoNivel(List<Map<String, Object>> todasAsPastas, String nome, Long parentId) {
+        for (Map<String, Object> pasta : todasAsPastas) {
+            if (!nome.equalsIgnoreCase(String.valueOf(pasta.get("name")))) {
+                continue;
+            }
+
+            Object parentBruto = pasta.get("parentId");
+            Long parentDaPasta = parentBruto == null ? null : Long.valueOf(parentBruto.toString());
+
+            if (java.util.Objects.equals(parentDaPasta, parentId)) {
+                Object id = pasta.get("id");
+                return id == null ? null : Long.valueOf(id.toString());
+            }
+        }
         return null;
     }
 
-    private Long criarFolder(String nomePasta) {
+    private Long criarFolder(String nomePasta, Long parentId) {
         HttpHeaders headers = criarHeaders();
 
         Map<String, Object> body = new HashMap<>();
         body.put("projectKey", zephyrProperties.getProjectKey());
         body.put("name", nomePasta);
         body.put("folderType", "TEST_CASE");
+        if (parentId != null) {
+            body.put("parentId", parentId);
+        }
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(
@@ -237,11 +269,189 @@ public class ZephyrClient {
             }
 
             Long folderId = Long.valueOf(id.toString());
-            log.info("Pasta criada no Zephyr. nome='{}', id={}", nomePasta, folderId);
+            log.info("Pasta criada no Zephyr. nome='{}', id={}, parentId={}", nomePasta, folderId, parentId);
             return folderId;
         } catch (HttpStatusCodeException ex) {
             throw new IllegalStateException(
                     "Falha ao criar pasta '" + nomePasta + "' no Zephyr (HTTP " + ex.getStatusCode() + "): " + ex.getResponseBodyAsString(),
+                    ex
+            );
+        }
+    }
+
+    /**
+     * Mapa nome-normalizado -> key dos casos de teste já existentes numa
+     * pasta, usado para não recriar um caso que já está lá (cada POST
+     * /cenario gera nomes muito parecidos; sem isso o board acumula
+     * duplicatas como "Login com e-mail não cadastrado" repetido). Uma
+     * chamada por pasta, não por item — o chamador cacheia por folderId.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, String> listarCasosDeTestePorPasta(Long folderId) {
+        validarConfiguracao();
+
+        if (folderId == null) {
+            return Map.of();
+        }
+
+        HttpHeaders headers = criarHeaders();
+        String url = baseUrl() + "/testcases?projectKey=" + zephyrProperties.getProjectKey()
+                + "&folderId=" + folderId + "&maxResults=100";
+
+        Map<String, String> porNome = new HashMap<>();
+
+        while (url != null) {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body == null) {
+                break;
+            }
+
+            List<Map<String, Object>> valores = (List<Map<String, Object>>) body.get("values");
+            if (valores != null) {
+                for (Map<String, Object> caso : valores) {
+                    Object nome = caso.get("name");
+                    Object key = caso.get("key");
+                    if (nome != null && key != null) {
+                        porNome.putIfAbsent(normalizarParaComparacao(nome.toString()), key.toString());
+                    }
+                }
+            }
+
+            Object proxima = body.get("next");
+            url = proxima == null ? null : proxima.toString();
+        }
+
+        return porNome;
+    }
+
+    /**
+     * Comparação de nome tolerante a diferenças cosméticas de formatação da
+     * IA (caixa, espaçamento múltiplo) — sem isso, "Login com  e-mail" e
+     * "login com e-mail" seriam tratados como cenários diferentes.
+     *
+     * static de propósito: é função pura e precisa ser a MESMA regra usada
+     * ao montar o mapa aqui e ao consultá-lo no ZephyrPublisherAgent. Como
+     * método de instância, um mock não configurado retornaria null para
+     * todo nome, fazendo cenários distintos colidirem na mesma chave e
+     * serem tratados como duplicatas.
+     */
+    public static String normalizarParaComparacao(String nome) {
+        if (nome == null || nome.isBlank()) {
+            return "";
+        }
+        return sanitizarNome(nome).toLowerCase().replaceAll("\\s+", " ").trim();
+    }
+
+    /**
+     * Resolve a key de um ciclo de teste pelo nome, criando-o no Zephyr se
+     * ainda não existir. Cacheável pelo chamador (um ciclo por geração, não
+     * por item) — igual pasta, mas resolvido uma única vez por lote em vez
+     * de uma vez por nome distinto (ver ZephyrPublisherAgent).
+     */
+    public String resolverOuCriarTestCycle(String nomeCiclo) {
+        validarConfiguracao();
+
+        if (isBlank(nomeCiclo)) {
+            return null;
+        }
+
+        String existente = buscarTestCycleExistente(nomeCiclo);
+        if (existente != null) {
+            return existente;
+        }
+
+        return criarTestCycle(nomeCiclo);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String buscarTestCycleExistente(String nomeCiclo) {
+        HttpHeaders headers = criarHeaders();
+        String url = baseUrl() + "/testcycles?projectKey=" + zephyrProperties.getProjectKey() + "&maxResults=50";
+
+        while (url != null) {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body == null) {
+                return null;
+            }
+
+            List<Map<String, Object>> valores = (List<Map<String, Object>>) body.get("values");
+            if (valores != null) {
+                for (Map<String, Object> ciclo : valores) {
+                    if (nomeCiclo.equalsIgnoreCase(String.valueOf(ciclo.get("name")))) {
+                        Object key = ciclo.get("key");
+                        return key == null ? null : key.toString();
+                    }
+                }
+            }
+
+            Object proxima = body.get("next");
+            url = proxima == null ? null : proxima.toString();
+        }
+
+        return null;
+    }
+
+    private String criarTestCycle(String nomeCiclo) {
+        HttpHeaders headers = criarHeaders();
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("projectKey", zephyrProperties.getProjectKey());
+        body.put("name", nomeCiclo);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    baseUrl() + "/testcycles",
+                    new HttpEntity<>(body, headers),
+                    Map.class
+            );
+
+            Object key = response.getBody() == null ? null : response.getBody().get("key");
+            if (key == null) {
+                throw new IllegalStateException("Zephyr não retornou 'key' ao criar o ciclo de teste '" + nomeCiclo + "'");
+            }
+
+            String cycleKey = key.toString();
+            log.info("Ciclo de teste criado no Zephyr. nome='{}', key={}", nomeCiclo, cycleKey);
+            return cycleKey;
+        } catch (HttpStatusCodeException ex) {
+            throw new IllegalStateException(
+                    "Falha ao criar ciclo de teste '" + nomeCiclo + "' no Zephyr (HTTP " + ex.getStatusCode() + "): " + ex.getResponseBodyAsString(),
+                    ex
+            );
+        }
+    }
+
+    /**
+     * Registra o caso de teste como uma execução dentro do ciclo (mantém
+     * também o link direto caso→issue feito por linkarIssueJira - as duas
+     * associações coexistem de propósito: o ciclo agrupa visualmente tudo
+     * que uma mesma geração produziu, o link direto garante que o caso
+     * apareça em "Casos de Teste cobertos" na issue mesmo sem abrir o ciclo).
+     */
+    public void adicionarExecucaoAoCiclo(String testCaseKey, String testCycleKey) {
+        validarConfiguracao();
+
+        HttpHeaders headers = criarHeaders();
+        Map<String, Object> body = new HashMap<>();
+        body.put("projectKey", zephyrProperties.getProjectKey());
+        body.put("testCaseKey", testCaseKey);
+        body.put("testCycleKey", testCycleKey);
+        // Obrigatório: a API rejeita com 400 "statusName: must not be null".
+        body.put("statusName", zephyrProperties.getDefaultExecutionStatusName());
+
+        try {
+            restTemplate.postForEntity(
+                    baseUrl() + "/testexecutions",
+                    new HttpEntity<>(body, headers),
+                    Map.class
+            );
+            log.info("Caso de teste {} adicionado ao ciclo {}", testCaseKey, testCycleKey);
+        } catch (HttpStatusCodeException ex) {
+            throw new IllegalStateException(
+                    "Falha ao adicionar caso de teste " + testCaseKey + " ao ciclo " + testCycleKey
+                            + " (HTTP " + ex.getStatusCode() + "): " + ex.getResponseBodyAsString(),
                     ex
             );
         }
@@ -298,8 +508,8 @@ public class ZephyrClient {
      * cegamente no que a IA/parser produziu como nome; normalizamos aqui,
      * na borda de saída, independente do que causou o formato malformado.
      */
-    private String sanitizarNome(String nome) {
-        if (isBlank(nome)) {
+    private static String sanitizarNome(String nome) {
+        if (nome == null || nome.isBlank()) {
             return "Cenário sem nome";
         }
 

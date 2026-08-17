@@ -361,4 +361,105 @@ class TestScenarioAgentTest {
         assertThat(context.getCenarios().get(0).getEvidenceType()).isEqualTo("DOCUMENTED");
         assertThat(context.getCenarios().get(0).getStatus()).isEqualTo("APPROVED");
     }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B (continuação): não deve rebaixar quando a fonte é um RF presente nos requisitos derivados desta execução, mesmo ausente do regraDeNegocio bruto")
+    void naoDeveAlterarEvidenciaQuandoFonteEhRfPresenteNosRequisitosDerivados() {
+        // Arrange - "RF01" não existe em regraDeNegocio, só em context.getRequisitos()
+        CenarioRequest request = new CenarioRequest(
+                "Cadastro de cliente",
+                "Sistema de cadastro. RN-A-01: telefone celular obrigatório.",
+                "gerador_cenarios_testes"
+        );
+        context = new WorkflowContext(request);
+        context.setRequisitos("Requisitos Funcionais:\nRF01: cliente informa telefone celular");
+        context.setDecisoesReuniao("");
+        context.setPlanoMacro("");
+
+        String respostaIA = """
+                ---
+                Nome: Cadastro com telefone celular informado
+                Objetivo: Validar cadastro com telefone celular
+                Passos:
+                Dado que o cliente acessa a tela de cadastro
+                Quando informa o telefone celular
+                Então o cadastro é concluído com sucesso
+                Resultado esperado: Cadastro concluído
+                Evidência: DOCUMENTED
+                Fontes: RN-A-01, RF01
+                ---
+                """;
+
+        CenarioItem cenario1 = new CenarioItem();
+        cenario1.setNome("Cadastro com telefone celular informado");
+        cenario1.setObjetivo("Validar cadastro com telefone celular");
+        cenario1.setScriptTeste("Dado que o cliente acessa a tela de cadastro\nQuando informa o telefone celular\nEntão o cadastro é concluído com sucesso");
+        cenario1.setStatus("APPROVED");
+        cenario1.setEvidenceType("DOCUMENTED");
+        cenario1.setEvidenceSources("RN-A-01, RF01");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn(respostaIA);
+        when(aiProvider.getName()).thenReturn("OpenAI");
+        when(cenarioTextoParser.parsear(respostaIA)).thenReturn(List.of(cenario1));
+        when(cenarioTextoParser.extrairCriterios(respostaIA)).thenReturn("Sistema deve permitir cadastro");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenarios()).hasSize(1);
+        assertThat(context.getCenarios().get(0).getEvidenceType()).isEqualTo("DOCUMENTED");
+        assertThat(context.getCenarios().get(0).getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @DisplayName("FASE15-BUG-005B (continuação): deve rebaixar quando o RF citado não existe nem em regraDeNegocio nem nos requisitos derivados desta execução")
+    void deveRebaixarQuandoRfNaoExisteEmNenhumaFonteDestaExecucao() {
+        CenarioRequest request = new CenarioRequest(
+                "Cadastro de cliente",
+                "Sistema de cadastro. RN-A-01: telefone celular obrigatório.",
+                "gerador_cenarios_testes"
+        );
+        context = new WorkflowContext(request);
+        context.setRequisitos("Requisitos Funcionais:\nRF01: cliente informa telefone celular");
+        context.setDecisoesReuniao("");
+        context.setPlanoMacro("");
+
+        String respostaIA = """
+                ---
+                Nome: Cadastro com comportamento não documentado
+                Objetivo: Validar comportamento hipotético
+                Passos:
+                Dado que o cliente acessa a tela de cadastro
+                Quando realiza uma ação não documentada
+                Então o cadastro é concluído com sucesso
+                Resultado esperado: Cadastro concluído
+                Evidência: DOCUMENTED
+                Fontes: RF99
+                ---
+                """;
+
+        CenarioItem cenario1 = new CenarioItem();
+        cenario1.setNome("Cadastro com comportamento não documentado");
+        cenario1.setObjetivo("Validar comportamento hipotético");
+        cenario1.setScriptTeste("Dado que o cliente acessa a tela de cadastro\nQuando realiza uma ação não documentada\nEntão o cadastro é concluído com sucesso");
+        cenario1.setStatus("APPROVED");
+        cenario1.setEvidenceType("DOCUMENTED");
+        cenario1.setEvidenceSources("RF99");
+
+        when(aiProviderResolver.getActiveProvider()).thenReturn(aiProvider);
+        when(aiProvider.gerarResposta(anyString(), anyString(), eq(TestScenarioAgent.GENERATOR_MAX_TOKENS))).thenReturn(respostaIA);
+        when(aiProvider.getName()).thenReturn("OpenAI");
+        when(cenarioTextoParser.parsear(respostaIA)).thenReturn(List.of(cenario1));
+        when(cenarioTextoParser.extrairCriterios(respostaIA)).thenReturn("Sistema deve permitir cadastro");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(context.getCenarios()).hasSize(1);
+        assertThat(context.getCenarios().get(0).getEvidenceType()).isEqualTo("EXPLORATORY");
+        assertThat(context.getCenarios().get(0).getStatus()).isEqualTo("REVIEW_REQUIRED");
+    }
 }
