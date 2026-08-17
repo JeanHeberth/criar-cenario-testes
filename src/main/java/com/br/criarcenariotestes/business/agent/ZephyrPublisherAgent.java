@@ -1,9 +1,14 @@
 package com.br.criarcenariotestes.business.agent;
 
 import com.br.criarcenariotestes.business.properties.ZephyrProperties;
+import com.br.criarcenariotestes.business.tracker.FolderStrategyResolver;
+import com.br.criarcenariotestes.business.tracker.ProvedorTarefa;
+import com.br.criarcenariotestes.business.tracker.ReferenciaTarefa;
+import com.br.criarcenariotestes.business.tracker.ReferenciaTarefaParser;
 import com.br.criarcenariotestes.business.workflow.WorkflowContext;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import com.br.criarcenariotestes.infrastructure.jira.JiraClient;
+import com.br.criarcenariotestes.infrastructure.zephyr.PastaInexistenteException;
 import com.br.criarcenariotestes.infrastructure.zephyr.ZephyrClient;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -35,6 +40,8 @@ public class ZephyrPublisherAgent implements BaseAgent {
     private final ZephyrClient zephyrClient;
     private final ZephyrProperties zephyrProperties;
     private final JiraClient jiraClient;
+    private final ReferenciaTarefaParser referenciaTarefaParser;
+    private final FolderStrategyResolver folderStrategyResolver;
 
     @Override
     public boolean isEnabled(WorkflowContext context) {
@@ -56,20 +63,24 @@ public class ZephyrPublisherAgent implements BaseAgent {
         Map<String, Long> pastasResolvidas = new HashMap<>();
         Map<Long, Map<String, String>> casosExistentesPorPasta = new HashMap<>();
         java.util.Set<String> keysJaAssociadas = new java.util.HashSet<>();
-        String jiraIssueId = resolverJiraIssueId(context.getRequest().jiraIssueKey());
-        String testCycleKey = resolverTestCycleKey(context);
+
+        ReferenciaTarefa referencia = resolverReferenciaTarefa(context);
+        String projectKey = resolverProjectKey(context, referencia);
+        String pastaRaiz = resolverPastaRaiz(context, referencia);
+        String jiraIssueId = resolverJiraIssueId(referencia);
+        String testCycleKey = resolverTestCycleKey(context, projectKey);
 
         for (CenarioItem item : cenarios) {
             try {
-                Long folderId = resolverFolderId(item, context, pastasResolvidas);
+                Long folderId = resolverFolderId(item, context, pastasResolvidas, projectKey, pastaRaiz);
 
-                String testCaseKey = buscarCasoJaExistente(item, folderId, casosExistentesPorPasta);
+                String testCaseKey = buscarCasoJaExistente(item, folderId, casosExistentesPorPasta, projectKey);
                 if (testCaseKey != null) {
                     log.info("Cenário '{}' já existe no Zephyr como {} - reaproveitando em vez de duplicar.",
                             item.getNome(), testCaseKey);
                     reaproveitados++;
                 } else {
-                    testCaseKey = zephyrClient.criarCasoDeTeste(item, folderId);
+                    testCaseKey = zephyrClient.criarCasoDeTeste(item, folderId, projectKey);
                     registrarCasoCriado(item, folderId, testCaseKey, casosExistentesPorPasta);
                 }
 
@@ -83,14 +94,14 @@ public class ZephyrPublisherAgent implements BaseAgent {
                         try {
                             zephyrClient.linkarIssueJira(testCaseKey, jiraIssueId);
                         } catch (Exception e) {
-                            log.warn("Caso de teste {} criado, mas falhou ao vincular à issue Jira '{}': {}",
-                                    testCaseKey, context.getRequest().jiraIssueKey(), e.getMessage());
+                            log.warn("Caso de teste {} criado, mas falhou ao vincular à tarefa '{}': {}",
+                                    testCaseKey, referencia == null ? null : referencia.identificador(), e.getMessage());
                         }
                     }
 
                     if (testCycleKey != null) {
                         try {
-                            zephyrClient.adicionarExecucaoAoCiclo(testCaseKey, testCycleKey);
+                            zephyrClient.adicionarExecucaoAoCiclo(testCaseKey, testCycleKey, projectKey);
                         } catch (Exception e) {
                             log.warn("Caso de teste {} criado, mas falhou ao adicionar ao ciclo '{}': {}",
                                     testCaseKey, testCycleKey, e.getMessage());
@@ -121,7 +132,8 @@ public class ZephyrPublisherAgent implements BaseAgent {
      * que é o comportamento anterior.
      */
     private String buscarCasoJaExistente(CenarioItem item, Long folderId,
-                                          Map<Long, Map<String, String>> casosExistentesPorPasta) {
+                                          Map<Long, Map<String, String>> casosExistentesPorPasta,
+                                          String projectKey) {
         if (folderId == null || !temTexto(item.getNome())) {
             return null;
         }
@@ -130,7 +142,7 @@ public class ZephyrPublisherAgent implements BaseAgent {
             // Cópia defensiva: o cache é mutado por registrarCasoCriado ao
             // longo do lote, e o client não garante devolver mapa mutável.
             Map<String, String> existentes = casosExistentesPorPasta
-                    .computeIfAbsent(folderId, id -> new HashMap<>(zephyrClient.listarCasosDeTestePorPasta(id)));
+                    .computeIfAbsent(folderId, id -> new HashMap<>(zephyrClient.listarCasosDeTestePorPasta(id, projectKey)));
             return existentes.get(ZephyrClient.normalizarParaComparacao(item.getNome()));
         } catch (Exception e) {
             log.warn("Falha ao consultar casos existentes na pasta {} - seguindo sem deduplicar. erro={}",
@@ -163,15 +175,15 @@ public class ZephyrPublisherAgent implements BaseAgent {
      * chamada (cache local). Falha ao resolver/criar nunca bloqueia a
      * publicação do item — cai para "sem pasta" e segue.
      */
-    private Long resolverFolderId(CenarioItem item, WorkflowContext context, Map<String, Long> pastasResolvidas) {
+    private Long resolverFolderId(CenarioItem item, WorkflowContext context,
+                                  Map<String, Long> pastasResolvidas, String projectKey,
+                                  String pastaRaizDerivada) {
         String folha = temTexto(item.getPasta()) ? item.getPasta() : context.getRequest().titulo();
         if (!temTexto(folha)) {
             return null;
         }
 
-        String raiz = temTexto(context.getRequest().pastaRaiz())
-                ? context.getRequest().pastaRaiz()
-                : zephyrProperties.getRootFolder();
+        String raiz = temTexto(pastaRaizDerivada) ? pastaRaizDerivada : zephyrProperties.getRootFolder();
 
         String caminho = temTexto(raiz) ? raiz.trim() + "/" + folha.trim() : folha.trim();
 
@@ -180,9 +192,15 @@ public class ZephyrPublisherAgent implements BaseAgent {
         }
 
         try {
-            Long folderId = zephyrClient.resolverOuCriarFolder(caminho);
+            Long folderId = zephyrClient.resolverOuCriarFolder(caminho, projectKey);
             pastasResolvidas.put(caminho, folderId);
             return folderId;
+        } catch (PastaInexistenteException e) {
+            // Deliberadamente NÃO cai para "sem pasta" como as demais falhas:
+            // quem desliga a criação automática quer justamente evitar caso de
+            // teste solto no board. Falhar este item (os outros seguem) é o
+            // resultado alinhado à configuração.
+            throw e;
         } catch (Exception e) {
             log.warn("Falha ao resolver/criar pasta '{}' no Zephyr - publicando '{}' sem pasta. erro={}",
                     caminho, item.getNome(), e.getMessage());
@@ -197,18 +215,85 @@ public class ZephyrPublisherAgent implements BaseAgent {
      * Falha ao resolver nunca bloqueia a publicação: os casos de teste são
      * criados normalmente, só sem vínculo com o Jira.
      */
-    private String resolverJiraIssueId(String jiraIssueKey) {
-        if (!temTexto(jiraIssueKey)) {
+    private String resolverJiraIssueId(ReferenciaTarefa referencia) {
+        if (referencia == null) {
+            return null;
+        }
+
+        // O vínculo é feito pela API do Zephyr Scale, que é addon do Jira e só
+        // aceita issue do Jira. Um work item do Azure precisa de outro caminho
+        // (Azure Test Plans), ainda não implementado — publicar sem vínculo e
+        // dizer isso é melhor que falhar a geração inteira ou silenciar.
+        if (referencia.provedor() != ProvedorTarefa.JIRA) {
+            log.warn("Referência '{}' é do {} - vínculo de tarefa ainda não suportado fora do Jira. "
+                            + "Os casos de teste serão publicados sem vínculo.",
+                    referencia.identificador(), referencia.provedor());
             return null;
         }
 
         try {
-            return jiraClient.buscarIssueId(jiraIssueKey);
+            return jiraClient.buscarIssueId(referencia.identificador());
         } catch (Exception e) {
             log.warn("Falha ao resolver id da issue Jira '{}' - publicando sem vínculo. erro={}",
-                    jiraIssueKey, e.getMessage());
+                    referencia.identificador(), e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Resolve a referência da tarefa informada no pedido. Falha ao interpretar
+     * nunca derruba a publicação: a geração via IA já terminou com sucesso, e
+     * uma referência malformada só custa o vínculo — não os casos de teste.
+     */
+    private ReferenciaTarefa resolverReferenciaTarefa(WorkflowContext context) {
+        try {
+            return referenciaTarefaParser.parsear(context.getRequest().taskRef()).orElse(null);
+        } catch (Exception e) {
+            log.warn("Referência de tarefa inválida - publicando sem vínculo. erro={}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Projeto de destino no Zephyr, em ordem de precedência: o informado
+     * explicitamente no pedido, o derivado da referência da tarefa, e por
+     * último o configurado no ambiente (zephyr.project-key).
+     *
+     * A derivação vale só para Jira, onde a chave carrega o projeto
+     * ("SCRUM-28" -> "SCRUM") e o Zephyr Scale compartilha o projeto do Jira.
+     * É heurística, e por isso o campo explícito do pedido tem precedência:
+     * times que usam um projeto Jira guarda-chuva com o Zephyr em outro lugar
+     * precisam poder sobrescrever.
+     */
+    /**
+     * Pasta raiz (stack de automação), em ordem de precedência: a informada
+     * explicitamente no pedido, a derivada da tarefa pela estratégia
+     * configurada, e por último zephyr.root-folder.
+     *
+     * O explícito vem primeiro pelo mesmo motivo do projectKey: a derivação é
+     * uma regra do time, e quem faz um pedido pontual fora do padrão precisa
+     * poder dizer para onde vai sem editar configuração.
+     */
+    private String resolverPastaRaiz(WorkflowContext context, ReferenciaTarefa referencia) {
+        String doPedido = context.getRequest().pastaDestino();
+        if (temTexto(doPedido)) {
+            return doPedido.trim();
+        }
+
+        return folderStrategyResolver.resolverPastaRaiz(referencia);
+    }
+
+    private String resolverProjectKey(WorkflowContext context, ReferenciaTarefa referencia) {
+        String doPedido = context.getRequest().projectKey();
+        if (temTexto(doPedido)) {
+            return doPedido.trim();
+        }
+
+        if (referencia != null && referencia.provedor() == ProvedorTarefa.JIRA) {
+            return referencia.projeto();
+        }
+
+        return null;
     }
 
     /**
@@ -219,14 +304,14 @@ public class ZephyrPublisherAgent implements BaseAgent {
      * convivem de propósito (ver adicionarExecucaoAoCiclo no ZephyrClient).
      * Falha ao resolver/criar o ciclo nunca bloqueia a publicação.
      */
-    private String resolverTestCycleKey(WorkflowContext context) {
+    private String resolverTestCycleKey(WorkflowContext context, String projectKey) {
         String nomeCiclo = context.getRequest().titulo();
         if (!temTexto(nomeCiclo)) {
             return null;
         }
 
         try {
-            return zephyrClient.resolverOuCriarTestCycle(nomeCiclo);
+            return zephyrClient.resolverOuCriarTestCycle(nomeCiclo, projectKey);
         } catch (Exception e) {
             log.warn("Falha ao resolver/criar ciclo de teste '{}' no Zephyr - publicando sem ciclo. erro={}",
                     nomeCiclo, e.getMessage());

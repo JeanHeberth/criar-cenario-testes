@@ -43,11 +43,28 @@ public class ZephyrClient {
     private final ZephyrProperties zephyrProperties;
     private final RestTemplate restTemplate = new RestTemplate();
 
+    /**
+     * Projeto de destino da operação: o informado no pedido quando houver,
+     * senão o configurado no ambiente.
+     *
+     * Existe porque zephyr.project-key é global por ambiente, o que limita a
+     * instância a atender um único time. Cada método público aceita um
+     * projectKey opcional para que times diferentes possam publicar em
+     * projetos diferentes sem subir uma instância por time.
+     */
+    private String projectKeyEfetivo(String projectKeyDoPedido) {
+        return isBlank(projectKeyDoPedido) ? zephyrProperties.getProjectKey() : projectKeyDoPedido.trim();
+    }
+
     public String criarCasoDeTeste(CenarioItem item, Long folderId) {
+        return criarCasoDeTeste(item, folderId, null);
+    }
+
+    public String criarCasoDeTeste(CenarioItem item, Long folderId, String projectKey) {
         validarConfiguracao();
 
         HttpHeaders headers = criarHeaders();
-        Map<String, Object> corpoCriacao = montarCorpoCriacao(item, folderId);
+        Map<String, Object> corpoCriacao = montarCorpoCriacao(item, folderId, projectKeyEfetivo(projectKey));
 
         String testCaseKey;
         try {
@@ -141,9 +158,9 @@ public class ZephyrClient {
         }
     }
 
-    private Map<String, Object> montarCorpoCriacao(CenarioItem item, Long folderId) {
+    private Map<String, Object> montarCorpoCriacao(CenarioItem item, Long folderId, String projectKey) {
         Map<String, Object> body = new HashMap<>();
-        body.put("projectKey", zephyrProperties.getProjectKey());
+        body.put("projectKey", projectKey);
         body.put("name", sanitizarNome(item.getNome()));
         body.put("statusName", zephyrProperties.getDefaultStatusName());
         body.put("priorityName", zephyrProperties.getDefaultPriorityName());
@@ -175,13 +192,18 @@ public class ZephyrClient {
      * homônimas. Cacheável pelo chamador (uma vez por caminho, não por item).
      */
     public Long resolverOuCriarFolder(String caminhoPasta) {
+        return resolverOuCriarFolder(caminhoPasta, null);
+    }
+
+    public Long resolverOuCriarFolder(String caminhoPasta, String projectKey) {
         validarConfiguracao();
 
         if (isBlank(caminhoPasta)) {
             return null;
         }
 
-        List<Map<String, Object>> todasAsPastas = listarTodasAsPastas();
+        String projeto = projectKeyEfetivo(projectKey);
+        List<Map<String, Object>> todasAsPastas = listarTodasAsPastas(projeto);
 
         Long parentId = null;
         for (String nivel : caminhoPasta.split("/")) {
@@ -191,16 +213,25 @@ public class ZephyrClient {
             }
 
             Long existente = buscarFolderNoNivel(todasAsPastas, nome, parentId);
-            parentId = existente != null ? existente : criarFolder(nome, parentId);
+
+            if (existente == null && !zephyrProperties.isAllowFolderCreation()) {
+                throw new PastaInexistenteException(
+                        "Pasta '" + nome + "' do caminho '" + caminhoPasta + "' não existe no projeto "
+                                + projeto + " e a criação automática está desabilitada "
+                                + "(zephyr.allow-folder-creation=false). Crie a pasta no Zephyr ou ajuste o "
+                                + "caminho no pedido.");
+            }
+
+            parentId = existente != null ? existente : criarFolder(nome, parentId, projeto);
         }
 
         return parentId;
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> listarTodasAsPastas() {
+    private List<Map<String, Object>> listarTodasAsPastas(String projectKey) {
         HttpHeaders headers = criarHeaders();
-        String url = baseUrl() + "/folders?projectKey=" + zephyrProperties.getProjectKey()
+        String url = baseUrl() + "/folders?projectKey=" + projectKey
                 + "&folderType=TEST_CASE&maxResults=100";
 
         List<Map<String, Object>> todas = new ArrayList<>();
@@ -245,11 +276,11 @@ public class ZephyrClient {
         return null;
     }
 
-    private Long criarFolder(String nomePasta, Long parentId) {
+    private Long criarFolder(String nomePasta, Long parentId, String projectKey) {
         HttpHeaders headers = criarHeaders();
 
         Map<String, Object> body = new HashMap<>();
-        body.put("projectKey", zephyrProperties.getProjectKey());
+        body.put("projectKey", projectKey);
         body.put("name", nomePasta);
         body.put("folderType", "TEST_CASE");
         if (parentId != null) {
@@ -288,6 +319,10 @@ public class ZephyrClient {
      */
     @SuppressWarnings("unchecked")
     public Map<String, String> listarCasosDeTestePorPasta(Long folderId) {
+        return listarCasosDeTestePorPasta(folderId, null);
+    }
+
+    public Map<String, String> listarCasosDeTestePorPasta(Long folderId, String projectKey) {
         validarConfiguracao();
 
         if (folderId == null) {
@@ -295,7 +330,7 @@ public class ZephyrClient {
         }
 
         HttpHeaders headers = criarHeaders();
-        String url = baseUrl() + "/testcases?projectKey=" + zephyrProperties.getProjectKey()
+        String url = baseUrl() + "/testcases?projectKey=" + projectKeyEfetivo(projectKey)
                 + "&folderId=" + folderId + "&maxResults=100";
 
         Map<String, String> porNome = new HashMap<>();
@@ -350,24 +385,30 @@ public class ZephyrClient {
      * de uma vez por nome distinto (ver ZephyrPublisherAgent).
      */
     public String resolverOuCriarTestCycle(String nomeCiclo) {
+        return resolverOuCriarTestCycle(nomeCiclo, null);
+    }
+
+    public String resolverOuCriarTestCycle(String nomeCiclo, String projectKey) {
         validarConfiguracao();
 
         if (isBlank(nomeCiclo)) {
             return null;
         }
 
-        String existente = buscarTestCycleExistente(nomeCiclo);
+        String projeto = projectKeyEfetivo(projectKey);
+
+        String existente = buscarTestCycleExistente(nomeCiclo, projeto);
         if (existente != null) {
             return existente;
         }
 
-        return criarTestCycle(nomeCiclo);
+        return criarTestCycle(nomeCiclo, projeto);
     }
 
     @SuppressWarnings("unchecked")
-    private String buscarTestCycleExistente(String nomeCiclo) {
+    private String buscarTestCycleExistente(String nomeCiclo, String projectKey) {
         HttpHeaders headers = criarHeaders();
-        String url = baseUrl() + "/testcycles?projectKey=" + zephyrProperties.getProjectKey() + "&maxResults=50";
+        String url = baseUrl() + "/testcycles?projectKey=" + projectKey + "&maxResults=50";
 
         while (url != null) {
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
@@ -393,11 +434,11 @@ public class ZephyrClient {
         return null;
     }
 
-    private String criarTestCycle(String nomeCiclo) {
+    private String criarTestCycle(String nomeCiclo, String projectKey) {
         HttpHeaders headers = criarHeaders();
 
         Map<String, Object> body = new HashMap<>();
-        body.put("projectKey", zephyrProperties.getProjectKey());
+        body.put("projectKey", projectKey);
         body.put("name", nomeCiclo);
 
         try {
@@ -431,11 +472,15 @@ public class ZephyrClient {
      * apareça em "Casos de Teste cobertos" na issue mesmo sem abrir o ciclo).
      */
     public void adicionarExecucaoAoCiclo(String testCaseKey, String testCycleKey) {
+        adicionarExecucaoAoCiclo(testCaseKey, testCycleKey, null);
+    }
+
+    public void adicionarExecucaoAoCiclo(String testCaseKey, String testCycleKey, String projectKey) {
         validarConfiguracao();
 
         HttpHeaders headers = criarHeaders();
         Map<String, Object> body = new HashMap<>();
-        body.put("projectKey", zephyrProperties.getProjectKey());
+        body.put("projectKey", projectKeyEfetivo(projectKey));
         body.put("testCaseKey", testCaseKey);
         body.put("testCycleKey", testCycleKey);
         // Obrigatório: a API rejeita com 400 "statusName: must not be null".
