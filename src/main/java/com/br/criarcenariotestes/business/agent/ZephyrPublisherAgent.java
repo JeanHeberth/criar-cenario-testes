@@ -52,21 +52,49 @@ public class ZephyrPublisherAgent implements BaseAgent {
 
         int sucesso = 0;
         int falha = 0;
+        int reaproveitados = 0;
         Map<String, Long> pastasResolvidas = new HashMap<>();
+        Map<Long, Map<String, String>> casosExistentesPorPasta = new HashMap<>();
+        java.util.Set<String> keysJaAssociadas = new java.util.HashSet<>();
         String jiraIssueId = resolverJiraIssueId(context.getRequest().jiraIssueKey());
+        String testCycleKey = resolverTestCycleKey(context);
 
         for (CenarioItem item : cenarios) {
             try {
                 Long folderId = resolverFolderId(item, context, pastasResolvidas);
-                String testCaseKey = zephyrClient.criarCasoDeTeste(item, folderId);
+
+                String testCaseKey = buscarCasoJaExistente(item, folderId, casosExistentesPorPasta);
+                if (testCaseKey != null) {
+                    log.info("Cenário '{}' já existe no Zephyr como {} - reaproveitando em vez de duplicar.",
+                            item.getNome(), testCaseKey);
+                    reaproveitados++;
+                } else {
+                    testCaseKey = zephyrClient.criarCasoDeTeste(item, folderId);
+                    registrarCasoCriado(item, folderId, testCaseKey, casosExistentesPorPasta);
+                }
+
                 item.setZephyrTestCaseKey(testCaseKey);
 
-                if (jiraIssueId != null) {
-                    try {
-                        zephyrClient.linkarIssueJira(testCaseKey, jiraIssueId);
-                    } catch (Exception e) {
-                        log.warn("Caso de teste {} criado, mas falhou ao vincular à issue Jira '{}': {}",
-                                testCaseKey, context.getRequest().jiraIssueKey(), e.getMessage());
+                // Dois itens do mesmo lote podem apontar para a mesma key
+                // (nomes repetidos pela IA). Vincular/adicionar ao ciclo mais
+                // de uma vez criaria execuções duplicadas para o mesmo caso.
+                if (keysJaAssociadas.add(testCaseKey)) {
+                    if (jiraIssueId != null) {
+                        try {
+                            zephyrClient.linkarIssueJira(testCaseKey, jiraIssueId);
+                        } catch (Exception e) {
+                            log.warn("Caso de teste {} criado, mas falhou ao vincular à issue Jira '{}': {}",
+                                    testCaseKey, context.getRequest().jiraIssueKey(), e.getMessage());
+                        }
+                    }
+
+                    if (testCycleKey != null) {
+                        try {
+                            zephyrClient.adicionarExecucaoAoCiclo(testCaseKey, testCycleKey);
+                        } catch (Exception e) {
+                            log.warn("Caso de teste {} criado, mas falhou ao adicionar ao ciclo '{}': {}",
+                                    testCaseKey, testCycleKey, e.getMessage());
+                        }
                     }
                 }
 
@@ -79,38 +107,86 @@ public class ZephyrPublisherAgent implements BaseAgent {
 
         context.addMetadata("zephyr_publicados", sucesso);
         context.addMetadata("zephyr_falhas", falha);
+        context.addMetadata("zephyr_reaproveitados", reaproveitados);
 
-        log.info("Publicação no Zephyr concluída. sucesso={}, falha={}, total={}", sucesso, falha, cenarios.size());
+        log.info("Publicação no Zephyr concluída. sucesso={}, reaproveitados={}, falha={}, total={}",
+                sucesso, reaproveitados, falha, cenarios.size());
     }
 
     /**
-     * Usa CenarioItem#pasta quando a IA especificou uma; senão cai no título
-     * do pedido original (ex.: "Login com credenciais válidas") como nome de
-     * pasta padrão — assim os casos de um mesmo POST /cenario sempre caem
-     * juntos em alguma pasta, nunca soltos na raiz. Resolvido no máximo uma
-     * vez por nome de pasta por chamada (cache local), já que uma mesma
-     * geração tipicamente reaproveita o mesmo nome em todos os itens.
-     * Falha ao resolver/criar a pasta nunca bloqueia a publicação do
-     * item — cai para "sem pasta" e segue.
+     * Evita duplicar no board um caso de teste que já existe na mesma pasta
+     * com o mesmo nome (cada POST /cenario sobre o mesmo tema gera nomes
+     * quase idênticos). A listagem é feita uma vez por pasta e cacheada.
+     * Falha na consulta nunca bloqueia: no pior caso cria o caso de novo,
+     * que é o comportamento anterior.
      */
-    private Long resolverFolderId(CenarioItem item, WorkflowContext context, Map<String, Long> pastasResolvidas) {
-        String nomePasta = temTexto(item.getPasta()) ? item.getPasta() : context.getRequest().titulo();
-        if (!temTexto(nomePasta)) {
+    private String buscarCasoJaExistente(CenarioItem item, Long folderId,
+                                          Map<Long, Map<String, String>> casosExistentesPorPasta) {
+        if (folderId == null || !temTexto(item.getNome())) {
             return null;
         }
 
-        if (pastasResolvidas.containsKey(nomePasta)) {
-            return pastasResolvidas.get(nomePasta);
+        try {
+            // Cópia defensiva: o cache é mutado por registrarCasoCriado ao
+            // longo do lote, e o client não garante devolver mapa mutável.
+            Map<String, String> existentes = casosExistentesPorPasta
+                    .computeIfAbsent(folderId, id -> new HashMap<>(zephyrClient.listarCasosDeTestePorPasta(id)));
+            return existentes.get(ZephyrClient.normalizarParaComparacao(item.getNome()));
+        } catch (Exception e) {
+            log.warn("Falha ao consultar casos existentes na pasta {} - seguindo sem deduplicar. erro={}",
+                    folderId, e.getMessage());
+            casosExistentesPorPasta.put(folderId, new HashMap<>());
+            return null;
+        }
+    }
+
+    /** Mantém o cache coerente para os próximos itens do mesmo lote. */
+    private void registrarCasoCriado(CenarioItem item, Long folderId, String testCaseKey,
+                                      Map<Long, Map<String, String>> casosExistentesPorPasta) {
+        if (folderId == null || !temTexto(item.getNome())) {
+            return;
+        }
+
+        casosExistentesPorPasta
+                .computeIfAbsent(folderId, k -> new HashMap<>())
+                .putIfAbsent(ZephyrClient.normalizarParaComparacao(item.getNome()), testCaseKey);
+    }
+
+    /**
+     * Monta o caminho hierárquico da pasta: "{pastaRaiz}/{folha}", onde a
+     * raiz é a stack de automação ("Java", "Robot") vinda do pedido ou de
+     * zephyr.root-folder, e a folha é CenarioItem#pasta (quando a IA
+     * especificou) ou o título do pedido. Assim os casos ficam organizados
+     * em "Java/Login", "Java/Compras" — em vez de dezenas de pastas soltas
+     * na raiz do projeto. Sem raiz configurada, mantém o comportamento
+     * anterior (só a folha). Resolvido no máximo uma vez por caminho por
+     * chamada (cache local). Falha ao resolver/criar nunca bloqueia a
+     * publicação do item — cai para "sem pasta" e segue.
+     */
+    private Long resolverFolderId(CenarioItem item, WorkflowContext context, Map<String, Long> pastasResolvidas) {
+        String folha = temTexto(item.getPasta()) ? item.getPasta() : context.getRequest().titulo();
+        if (!temTexto(folha)) {
+            return null;
+        }
+
+        String raiz = temTexto(context.getRequest().pastaRaiz())
+                ? context.getRequest().pastaRaiz()
+                : zephyrProperties.getRootFolder();
+
+        String caminho = temTexto(raiz) ? raiz.trim() + "/" + folha.trim() : folha.trim();
+
+        if (pastasResolvidas.containsKey(caminho)) {
+            return pastasResolvidas.get(caminho);
         }
 
         try {
-            Long folderId = zephyrClient.resolverOuCriarFolder(nomePasta);
-            pastasResolvidas.put(nomePasta, folderId);
+            Long folderId = zephyrClient.resolverOuCriarFolder(caminho);
+            pastasResolvidas.put(caminho, folderId);
             return folderId;
         } catch (Exception e) {
             log.warn("Falha ao resolver/criar pasta '{}' no Zephyr - publicando '{}' sem pasta. erro={}",
-                    nomePasta, item.getNome(), e.getMessage());
-            pastasResolvidas.put(nomePasta, null);
+                    caminho, item.getNome(), e.getMessage());
+            pastasResolvidas.put(caminho, null);
             return null;
         }
     }
@@ -131,6 +207,29 @@ public class ZephyrPublisherAgent implements BaseAgent {
         } catch (Exception e) {
             log.warn("Falha ao resolver id da issue Jira '{}' - publicando sem vínculo. erro={}",
                     jiraIssueKey, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Resolvido no máximo uma vez por chamada (não por item), pelo mesmo
+     * nome usado na pasta padrão (título do pedido) - agrupa tudo que uma
+     * mesma geração produziu num único ciclo, em vez de cada caso ficar
+     * solto. Complementa, não substitui, o link direto caso→issue: os dois
+     * convivem de propósito (ver adicionarExecucaoAoCiclo no ZephyrClient).
+     * Falha ao resolver/criar o ciclo nunca bloqueia a publicação.
+     */
+    private String resolverTestCycleKey(WorkflowContext context) {
+        String nomeCiclo = context.getRequest().titulo();
+        if (!temTexto(nomeCiclo)) {
+            return null;
+        }
+
+        try {
+            return zephyrClient.resolverOuCriarTestCycle(nomeCiclo);
+        } catch (Exception e) {
+            log.warn("Falha ao resolver/criar ciclo de teste '{}' no Zephyr - publicando sem ciclo. erro={}",
+                    nomeCiclo, e.getMessage());
             return null;
         }
     }

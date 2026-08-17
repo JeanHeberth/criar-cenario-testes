@@ -37,6 +37,11 @@ dependencies {
     providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    // SDK oficial da Anthropic. Os providers OpenAI/Gemini falam HTTP cru via
+    // RestTemplate porque foram escritos assim; para Claude usamos o SDK
+    // oficial, que já trata contrato de mensagens, thinking, stop_reason e
+    // retries sem termos que reimplementar isso à mão.
+    implementation 'com.anthropic:anthropic-java:2.34.0'
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.projectlombok:lombok'

@@ -97,6 +97,16 @@ public class GeminiProvider implements AiProvider {
         // Evita truncar resposta e perder cenarios na saida.
         generationConfig.put("maxOutputTokens", maxOutputTokens);
 
+        // Modelos 2.5 vêm com "thinking" ligado por padrão, e esses tokens de
+        // raciocínio consomem o MESMO orçamento de maxOutputTokens - observado
+        // na prática: resposta cortada em finishReason=MAX_TOKENS deixando o
+        // cenário sem "Quando"/"Então" e reprovando na validação BDD. Geração
+        // de cenário é tarefa de formatação estruturada, não de raciocínio
+        // longo, então desligamos para o orçamento inteiro ir para o texto.
+        if (properties.isDisableThinking()) {
+            generationConfig.put("thinkingConfig", Map.of("thinkingBudget", 0));
+        }
+
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("contents", contents);
         requestBody.put("generationConfig", generationConfig);

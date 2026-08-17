@@ -15,4 +15,7 @@ public class GeminiProperties {
     private String model;
     private String url;
     private Integer maxOutputTokens = 4000;
+    // Desliga o "thinking" dos modelos 2.5, cujos tokens de raciocínio
+    // consomem o mesmo orçamento de maxOutputTokens e truncam a resposta.
+    private boolean disableThinking = true;
 }

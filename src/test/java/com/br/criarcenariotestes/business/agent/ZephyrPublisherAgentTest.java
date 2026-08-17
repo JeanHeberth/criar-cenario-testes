@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -338,5 +339,276 @@ class ZephyrPublisherAgentTest {
         assertThat(item.getZephyrTestCaseKey()).isEqualTo("SCRUM-T1");
         assertThat(contextComIssue.getMetadata("zephyr_publicados")).isEqualTo(1);
         assertThat(contextComIssue.getMetadata("zephyr_falhas")).isEqualTo(0);
+    }
+
+    // ===== Agrupamento em Ciclo de Teste (complementa o link direto) =====
+
+    @Test
+    @DisplayName("Deve resolver o ciclo pelo título do pedido uma única vez e adicionar cada caso de teste criado")
+    void deveAdicionarCadaCasoDeTesteAoCicloResolvidoPeloTitulo() {
+        // Arrange - context do setUp usa titulo="Login OAuth"
+        CenarioItem item1 = new CenarioItem();
+        item1.setNome("Cenário 1");
+        CenarioItem item2 = new CenarioItem();
+        item2.setNome("Cenário 2");
+        context.setCenarios(List.of(item1, item2));
+
+        when(zephyrClient.resolverOuCriarTestCycle("Login OAuth")).thenReturn("SCRUM-R1");
+        when(zephyrClient.criarCasoDeTeste(any(), any())).thenReturn("SCRUM-T1", "SCRUM-T2");
+
+        // Act
+        agent.executar(context);
+
+        // Assert - resolve o ciclo 1 única vez, adiciona os 2 casos criados
+        verify(zephyrClient, times(1)).resolverOuCriarTestCycle("Login OAuth");
+        verify(zephyrClient, times(1)).adicionarExecucaoAoCiclo("SCRUM-T1", "SCRUM-R1");
+        verify(zephyrClient, times(1)).adicionarExecucaoAoCiclo("SCRUM-T2", "SCRUM-R1");
+    }
+
+    @Test
+    @DisplayName("Falha ao resolver/criar o ciclo não deve impedir a publicação do item")
+    void falhaAoResolverCicloNaoDeveImpedirPublicacao() {
+        // Arrange
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário qualquer");
+        context.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarTestCycle("Login OAuth"))
+                .thenThrow(new IllegalStateException("Zephyr indisponível para ciclos"));
+        when(zephyrClient.criarCasoDeTeste(eq(item), any())).thenReturn("SCRUM-T1");
+
+        // Act
+        agent.executar(context);
+
+        // Assert - segue publicando sem ciclo
+        assertThat(item.getZephyrTestCaseKey()).isEqualTo("SCRUM-T1");
+        assertThat(context.getMetadata("zephyr_falhas")).isEqualTo(0);
+        verify(zephyrClient, never()).adicionarExecucaoAoCiclo(any(), any());
+    }
+
+    @Test
+    @DisplayName("Falha ao adicionar execução ao ciclo não deve derrubar a publicação do caso de teste já criado")
+    void falhaAoAdicionarExecucaoNaoDeveDerrubarPublicacao() {
+        // Arrange
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário qualquer");
+        context.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarTestCycle("Login OAuth")).thenReturn("SCRUM-R1");
+        when(zephyrClient.criarCasoDeTeste(eq(item), any())).thenReturn("SCRUM-T1");
+        org.mockito.Mockito.doThrow(new IllegalStateException("Zephyr indisponível pra execução"))
+                .when(zephyrClient).adicionarExecucaoAoCiclo("SCRUM-T1", "SCRUM-R1");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(item.getZephyrTestCaseKey()).isEqualTo("SCRUM-T1");
+        assertThat(context.getMetadata("zephyr_publicados")).isEqualTo(1);
+        assertThat(context.getMetadata("zephyr_falhas")).isEqualTo(0);
+    }
+
+    // ===== Pastas hierárquicas ({raiz}/{folha}) =====
+
+    @Test
+    @DisplayName("Deve montar caminho hierárquico {pastaRaiz}/{titulo} quando o pedido informa pastaRaiz")
+    void deveMontarCaminhoHierarquicoComPastaRaizDoPedido() {
+        // Arrange
+        CenarioRequest requestComRaiz = new CenarioRequest(
+                "Login", "Sistema de login", "gerador_cenarios_testes",
+                com.br.criarcenariotestes.business.workflow.WorkflowType.RAPIDO, null, "Java"
+        );
+        WorkflowContext contextComRaiz = new WorkflowContext(requestComRaiz);
+
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário 1");
+        contextComRaiz.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarFolder("Java/Login")).thenReturn(10L);
+        when(zephyrClient.criarCasoDeTeste(eq(item), eq(10L))).thenReturn("SCRUM-T1");
+
+        // Act
+        agent.executar(contextComRaiz);
+
+        // Assert
+        verify(zephyrClient, times(1)).resolverOuCriarFolder("Java/Login");
+        assertThat(item.getZephyrTestCaseKey()).isEqualTo("SCRUM-T1");
+    }
+
+    @Test
+    @DisplayName("Deve usar zephyr.root-folder como raiz quando o pedido não informa pastaRaiz")
+    void deveUsarRootFolderDaConfiguracaoQuandoPedidoNaoInforma() {
+        // Arrange - context do setUp tem titulo="Login OAuth" e pastaRaiz=null
+        zephyrProperties.setRootFolder("Robot");
+
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário 1");
+        context.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarFolder("Robot/Login OAuth")).thenReturn(11L);
+        when(zephyrClient.criarCasoDeTeste(eq(item), eq(11L))).thenReturn("SCRUM-T1");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        verify(zephyrClient, times(1)).resolverOuCriarFolder("Robot/Login OAuth");
+    }
+
+    @Test
+    @DisplayName("pastaRaiz do pedido deve ter precedência sobre zephyr.root-folder")
+    void pastaRaizDoPedidoDeveTerPrecedenciaSobreConfiguracao() {
+        // Arrange
+        zephyrProperties.setRootFolder("Robot");
+
+        CenarioRequest requestComRaiz = new CenarioRequest(
+                "Login", "Sistema de login", "gerador_cenarios_testes",
+                com.br.criarcenariotestes.business.workflow.WorkflowType.RAPIDO, null, "Java"
+        );
+        WorkflowContext contextComRaiz = new WorkflowContext(requestComRaiz);
+
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário 1");
+        contextComRaiz.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarFolder(any())).thenReturn(12L);
+        when(zephyrClient.criarCasoDeTeste(any(), any())).thenReturn("SCRUM-T1");
+
+        // Act
+        agent.executar(contextComRaiz);
+
+        // Assert
+        verify(zephyrClient, times(1)).resolverOuCriarFolder("Java/Login");
+        verify(zephyrClient, never()).resolverOuCriarFolder("Robot/Login");
+    }
+
+    @Test
+    @DisplayName("Sem raiz configurada, mantém o comportamento anterior (só a folha)")
+    void semRaizConfiguradaDeveUsarApenasAFolha() {
+        // Arrange - rootFolder default é "" e pastaRaiz do request é null
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário 1");
+        context.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarFolder("Login OAuth")).thenReturn(13L);
+        when(zephyrClient.criarCasoDeTeste(any(), any())).thenReturn("SCRUM-T1");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        verify(zephyrClient, times(1)).resolverOuCriarFolder("Login OAuth");
+    }
+
+    // ===== Deduplicação de casos de teste =====
+
+    @Test
+    @DisplayName("Não deve recriar caso de teste que já existe na mesma pasta com o mesmo nome")
+    void naoDeveRecriarCasoDeTesteJaExistenteNaPasta() {
+        // Arrange
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login com e-mail não cadastrado");
+        context.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarFolder(any())).thenReturn(20L);
+        when(zephyrClient.listarCasosDeTestePorPasta(20L))
+                .thenReturn(Map.of("login com e-mail não cadastrado", "SCRUM-T46"));
+
+        // Act
+        agent.executar(context);
+
+        // Assert - reaproveita a key existente, nunca cria
+        assertThat(item.getZephyrTestCaseKey()).isEqualTo("SCRUM-T46");
+        assertThat(context.getMetadata("zephyr_reaproveitados")).isEqualTo(1);
+        verify(zephyrClient, never()).criarCasoDeTeste(any(), any());
+    }
+
+    @Test
+    @DisplayName("Deve criar normalmente quando não existe caso com o mesmo nome na pasta")
+    void deveCriarQuandoNaoExisteCasoComMesmoNome() {
+        // Arrange
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário totalmente novo");
+        context.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarFolder(any())).thenReturn(21L);
+        when(zephyrClient.listarCasosDeTestePorPasta(21L))
+                .thenReturn(Map.of("outro cenario qualquer", "SCRUM-T99"));
+        when(zephyrClient.criarCasoDeTeste(eq(item), eq(21L))).thenReturn("SCRUM-T100");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(item.getZephyrTestCaseKey()).isEqualTo("SCRUM-T100");
+        assertThat(context.getMetadata("zephyr_reaproveitados")).isEqualTo(0);
+        verify(zephyrClient, times(1)).criarCasoDeTeste(item, 21L);
+    }
+
+    @Test
+    @DisplayName("Deve deduplicar dentro do próprio lote - dois itens com o mesmo nome criam um único caso")
+    void deveDeduplicarDentroDoProprioLote() {
+        // Arrange - a IA às vezes repete o mesmo cenário na mesma resposta
+        CenarioItem item1 = new CenarioItem();
+        item1.setNome("Login com e-mail inválido");
+        CenarioItem item2 = new CenarioItem();
+        item2.setNome("Login com e-mail inválido");
+        context.setCenarios(List.of(item1, item2));
+
+        when(zephyrClient.resolverOuCriarFolder(any())).thenReturn(22L);
+        when(zephyrClient.listarCasosDeTestePorPasta(22L)).thenReturn(new java.util.HashMap<>());
+        when(zephyrClient.criarCasoDeTeste(any(), any())).thenReturn("SCRUM-T1");
+
+        // Act
+        agent.executar(context);
+
+        // Assert - cria só uma vez, o segundo reaproveita
+        verify(zephyrClient, times(1)).criarCasoDeTeste(any(), any());
+        assertThat(item1.getZephyrTestCaseKey()).isEqualTo("SCRUM-T1");
+        assertThat(item2.getZephyrTestCaseKey()).isEqualTo("SCRUM-T1");
+        assertThat(context.getMetadata("zephyr_reaproveitados")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Deve consultar os casos existentes uma única vez por pasta, não por item")
+    void deveConsultarCasosExistentesUmaUnicaVezPorPasta() {
+        // Arrange
+        CenarioItem item1 = new CenarioItem();
+        item1.setNome("Cenário 1");
+        CenarioItem item2 = new CenarioItem();
+        item2.setNome("Cenário 2");
+        context.setCenarios(List.of(item1, item2));
+
+        when(zephyrClient.resolverOuCriarFolder(any())).thenReturn(23L);
+        when(zephyrClient.listarCasosDeTestePorPasta(23L)).thenReturn(new java.util.HashMap<>());
+        when(zephyrClient.criarCasoDeTeste(any(), any())).thenReturn("SCRUM-T1", "SCRUM-T2");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        verify(zephyrClient, times(1)).listarCasosDeTestePorPasta(23L);
+        verify(zephyrClient, times(2)).criarCasoDeTeste(any(), any());
+    }
+
+    @Test
+    @DisplayName("Falha ao consultar casos existentes não deve bloquear a publicação - cria como antes")
+    void falhaAoConsultarCasosExistentesNaoDeveBloquearPublicacao() {
+        // Arrange
+        CenarioItem item = new CenarioItem();
+        item.setNome("Cenário qualquer");
+        context.setCenarios(List.of(item));
+
+        when(zephyrClient.resolverOuCriarFolder(any())).thenReturn(24L);
+        when(zephyrClient.listarCasosDeTestePorPasta(24L))
+                .thenThrow(new IllegalStateException("Zephyr indisponível para consulta"));
+        when(zephyrClient.criarCasoDeTeste(eq(item), eq(24L))).thenReturn("SCRUM-T1");
+
+        // Act
+        agent.executar(context);
+
+        // Assert
+        assertThat(item.getZephyrTestCaseKey()).isEqualTo("SCRUM-T1");
+        assertThat(context.getMetadata("zephyr_falhas")).isEqualTo(0);
     }
 }
