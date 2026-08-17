@@ -23,7 +23,28 @@ public class ZephyrProperties {
     // rejeita com 400 "statusName: must not be null" se ausente).
     private String defaultExecutionStatusName = "Not Executed";
     // Pasta raiz padrão (stack de automação) usada quando o pedido não
-    // informa CenarioRequest#pastaRaiz. Vazio = casos criados direto na raiz
-    // do projeto, como era antes.
+    // informa CenarioRequest#pastaDestino. Vazio = casos criados direto na
+    // raiz do projeto, como era antes.
     private String rootFolder = "";
+
+    /**
+     * Se a publicação pode CRIAR pastas que ainda não existem no projeto.
+     *
+     * Com false, o gerador só deposita em pastas que o dono do board já
+     * criou; um caminho inexistente falha dizendo qual era o esperado, em vez
+     * de criar. Isso existe porque o estrago de errar é assimétrico e
+     * permanente: a API do Zephyr não expõe remoção de pasta (DELETE
+     * /folders responde 405), então cada pasta criada por engano vira
+     * limpeza manual pela interface. Em time grande, onde cada squad traz sua
+     * convenção de nome, criação livre multiplica variações da mesma pasta
+     * ("Login", "Autenticação", "Auth") e quebra a deduplicação, que é
+     * escopada por folderId.
+     *
+     * Default true para preservar o comportamento atual de quem já usa. Times
+     * com taxonomia governada devem ligar em false.
+     */
+    private boolean allowFolderCreation = true;
+
+    /** Ver FolderStrategyProperties. Desligada por padrão. */
+    private FolderStrategyProperties folderStrategy = new FolderStrategyProperties();
 }

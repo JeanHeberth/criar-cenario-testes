@@ -89,6 +89,61 @@ public class JiraClient {
         }
     }
 
+    /**
+     * Lê os campos da issue usados para decidir a pasta de destino no
+     * repositório de testes (ver FolderStrategyResolver). Uma chamada por
+     * geração, não por cenário.
+     */
+    public DadosDaIssue buscarDadosDaIssue(String taskKey) {
+        validarConfiguracao();
+
+        String url = montarBaseIssueUrl() + "/" + taskKey + "?fields=summary,components,labels";
+
+        HttpHeaders headers = criarHeadersJson();
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class
+            );
+
+            JsonNode issue = objectMapper.readTree(response.getBody());
+            JsonNode fields = issue.path("fields");
+
+            return new DadosDaIssue(
+                    issue.path("key").asText(null),
+                    issue.path("id").asText(null),
+                    fields.path("summary").asText(null),
+                    extrairNomes(fields.path("components"), "name"),
+                    extrairNomes(fields.path("labels"), null)
+            );
+        } catch (HttpClientErrorException.NotFound ex) {
+            throw new ResponseStatusException(NOT_FOUND, "Task Jira nao encontrada: " + taskKey, ex);
+        } catch (HttpClientErrorException ex) {
+            throw new ResponseStatusException(BAD_GATEWAY, "Falha ao consultar Jira", ex);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(BAD_GATEWAY, "Erro inesperado ao consultar Jira", ex);
+        }
+    }
+
+    /** Components vêm como objetos com "name"; labels vêm como strings puras. */
+    private List<String> extrairNomes(JsonNode array, String campo) {
+        if (array == null || !array.isArray()) {
+            return List.of();
+        }
+
+        List<String> nomes = new java.util.ArrayList<>();
+        for (JsonNode no : array) {
+            String valor = campo == null ? no.asText(null) : no.path(campo).asText(null);
+            if (valor != null && !valor.isBlank()) {
+                nomes.add(valor);
+            }
+        }
+        return nomes;
+    }
+
     public byte[] baixarAnexo(String attachmentContentUrl) {
         validarConfiguracao();
 

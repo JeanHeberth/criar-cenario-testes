@@ -161,6 +161,13 @@ public class QaWorkflowService {
             GeneratedScenariosValidator.ValidationResult resultado =
                     generatedScenariosValidator.validarRepresentacaoFinal(item);
             if (!resultado.valido()) {
+                // Sem o texto reprovado, esta exceção só diz QUE falhou, não
+                // POR QUE — e como o conteúdo vem da IA e muda a cada geração,
+                // reproduzir para diagnosticar custa uma rodada inteira de
+                // chamadas. Logar o passo é o que permite corrigir a regra de
+                // validação (ou o BddFormatterAgent) na primeira ocorrência.
+                log.error("Validação final reprovou o cenário '{}'. motivo='{}'. scriptTeste=<<<{}>>> resultadoEsperado=<<<{}>>>",
+                        item.getNome(), resultado.motivo(), item.getScriptTeste(), item.getResultadoEsperado());
                 throw new ValidacaoEstruturalException("Validação final antes da persistência falhou: " + resultado.motivo());
             }
         }
