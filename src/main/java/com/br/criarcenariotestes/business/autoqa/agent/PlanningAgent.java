@@ -36,23 +36,24 @@ public class PlanningAgent implements AutoQaAgent {
         if (context.getProjectDiscoveryResult() == null
                 || context.getScenarioAnalysisResult() == null
                 || context.getProjectKnowledgeResult() == null) {
-            log.warn("Planning agent skipped. executionId={}, reason=missing-preconditions", context.getExecutionId());
-            log.info("Planning agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha no planejamento técnico");
+            log.warn("Planning agent skipped. executionId={}, reason=missing-preconditions, discovery={}, scenario={}, knowledge={}",
+                    context.getExecutionId(),
+                    context.getProjectDiscoveryResult() != null,
+                    context.getScenarioAnalysisResult() != null,
+                    context.getProjectKnowledgeResult() != null);
+            return AgentExecutionResult.failure("Pré-condições ausentes para o planejamento técnico");
         }
 
         if (context.getScenarioAnalysisResult().status() ==
                 com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisStatus.INVALID) {
             log.warn("Planning agent skipped. executionId={}, reason=invalid-scenario", context.getExecutionId());
-            log.info("Planning agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha no planejamento técnico");
+            return AgentExecutionResult.failure("Cenário marcado como inválido pela análise — verifique ambiguidades bloqueantes");
         }
 
         if (context.getProjectKnowledgeResult().status() ==
                 com.br.criarcenariotestes.business.autoqa.model.knowledge.KnowledgeStatus.FAILED) {
             log.warn("Planning agent skipped. executionId={}, reason=failed-knowledge", context.getExecutionId());
-            log.info("Planning agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha no planejamento técnico");
+            return AgentExecutionResult.failure("Knowledge do projeto falhou — verifique se o caminho do projeto está acessível");
         }
 
         try {
@@ -65,10 +66,9 @@ public class PlanningAgent implements AutoQaAgent {
             log.info("Planning agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success(buildSummary(result));
         } catch (PlanningException | IllegalArgumentException exception) {
-            log.warn("Planning agent failed. executionId={}, failureType={}",
-                    context.getExecutionId(), exception.getClass().getSimpleName());
-            log.info("Planning agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha no planejamento técnico");
+            log.warn("Planning agent failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
+            return AgentExecutionResult.failure("Falha no planejamento técnico: " + exception.getMessage());
         }
     }
 

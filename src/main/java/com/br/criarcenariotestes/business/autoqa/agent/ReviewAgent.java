@@ -71,11 +71,18 @@ public class ReviewAgent implements AutoQaAgent {
                     context.getGenerationResult()
             );
             context.registerCodeReview(result);
+            // Com CHANGES_REQUIRED o apply é bloqueado. Sem os achados no log,
+            // o usuário só vê "falha na aplicação de arquivos" e não tem como
+            // saber o que o revisor pediu para mudar.
+            if (result.status() == com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus.CHANGES_REQUIRED) {
+                log.warn("Revisão pediu mudanças. executionId={}, issuesGlobais={}, arquivos={}",
+                        context.getExecutionId(), result.globalIssues(), result.files());
+            }
             log.info("Review agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success(buildSummary(result));
         } catch (CodeReviewException | IllegalArgumentException exception) {
-            log.warn("Review agent failed. executionId={}, failureType={}",
-                    context.getExecutionId(), exception.getClass().getSimpleName());
+            log.warn("Review agent failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Review agent finished. executionId={}, status=FAILED", context.getExecutionId());
             return AgentExecutionResult.failure("Falha na revisão de código gerado");
         }

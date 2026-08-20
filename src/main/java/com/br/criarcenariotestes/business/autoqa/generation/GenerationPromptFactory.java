@@ -1,5 +1,6 @@
 package com.br.criarcenariotestes.business.autoqa.generation;
 
+import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,6 +24,30 @@ public class GenerationPromptFactory {
                 - Reutilizar os componentes existentes informados quando aplicável, referenciando-os em "reusedComponents"
                 - Usar português do Brasil apenas nos campos textuais descritivos (ex.: "description" de warnings)
                 - O código gerado deve ser escrito na linguagem correta: TypeScript/JavaScript para Playwright/Cypress, Java para Selenide/Selenium/RestAssured, Robot Framework para Robot
+                - NUNCA escrever credencial, senha, token, apiKey ou secret literal no
+                  código, nem como valor de constante, nem em comentário. Ler sempre de
+                  variável de ambiente: process.env.X em TypeScript/JavaScript,
+                  System.getenv("X") em Java, %{X} em Robot Framework. A revisão trata
+                  segredo hardcoded como achado CRÍTICO e bloqueia a aplicação dos
+                  arquivos, então gerar assim descarta a geração inteira.
+                - A regra acima vale TAMBÉM para as credenciais PROPOSITALMENTE INVÁLIDAS
+                  dos casos negativos. Não escreva const invalidPassword = 'SenhaErrada123'
+                  nem equivalente: use process.env.AUTH_INVALID_PASSWORD (ou nome análogo).
+                  Qualquer literal atribuído a um campo chamado senha/password/secret/token
+                  é reprovado, mesmo que o valor seja falso, de exemplo ou de teste.
+                - Não escrever URL de ambiente literal no teste: usar a configuração do
+                  projeto (baseURL do playwright.config, variável de ambiente ou
+                  equivalente do framework)
+                - Quando a chamada usa baseURL, o caminho deve ser RELATIVO, sem barra
+                  inicial: use 'v1/auth/login', nunca '/v1/auth/login'. A resolução segue
+                  a regra de URL do padrão web, e um caminho com barra inicial DESCARTA o
+                  prefixo da base — com baseURL 'http://host/api/' o path '/v1/login' vira
+                  'http://host/v1/login' e devolve 404, silenciosamente.
+                - Ao documentar variáveis de ambiente (README, .env.example, comentário),
+                  colocar entre aspas todo valor que contenha '#', espaço ou caractere
+                  especial: em arquivo .env o '#' inicia comentário e trunca o valor —
+                  SENHA=abc#123 é lido como 'abc', e o teste falha com credencial inválida
+                  sem nenhuma pista do motivo.
                 - Quando não for possível gerar algum arquivo planejado, use status "PARTIAL" e inclua um warning explicando o motivo
                 - Quando não for possível gerar nenhum arquivo, use status "FAILED" e não inclua itens em "files"
 
@@ -58,6 +83,11 @@ public class GenerationPromptFactory {
     public String createUserPrompt(SanitizedGenerationInput input) {
         StringBuilder sb = new StringBuilder();
         sb.append("Framework de automação: ").append(input.framework()).append("\n");
+        if (input.automationType() != null && input.automationType() != AutomationType.UNKNOWN) {
+            sb.append("Canal do teste: ").append(input.automationType()).append("\n");
+            sb.append("Use a API do framework correspondente a esse canal ")
+              .append("(ex.: no Playwright, WEB_UI usa page/locators; API usa request/APIRequestContext).\n");
+        }
         sb.append("Linguagem: ").append(input.language()).append("\n");
         sb.append("Build tool: ").append(input.buildTool()).append("\n");
         if (!input.testingFrameworks().isEmpty()) {

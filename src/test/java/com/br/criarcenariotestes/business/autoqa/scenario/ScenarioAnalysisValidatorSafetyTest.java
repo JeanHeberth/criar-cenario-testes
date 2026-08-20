@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Collections;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("ScenarioAnalysisValidatorSafety - Testes Unitários")
@@ -122,9 +123,17 @@ class ScenarioAnalysisValidatorSafetyTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar enum UNKNOWN")
-    void deveRejeitarEnumUnknown() {
+    @DisplayName("Deve aceitar automationType UNKNOWN")
+    void deveAceitarAutomationTypeUnknown() {
         ScenarioAnalysisResult result = withAutomationType(AutomationType.UNKNOWN);
+
+        assertThat(validator.validate(result)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar automationType nulo")
+    void deveRejeitarAutomationTypeNulo() {
+        ScenarioAnalysisResult result = withAutomationType(null);
 
         assertThatThrownBy(() -> validator.validate(result))
                 .isInstanceOf(ScenarioAnalysisValidationException.class);

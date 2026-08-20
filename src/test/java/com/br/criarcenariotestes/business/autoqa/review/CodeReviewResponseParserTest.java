@@ -61,8 +61,8 @@ class CodeReviewResponseParserTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar campo desconhecido")
-    void deveRejeitarCampoDesconhecido() {
+    @DisplayName("Deve ignorar campo desconhecido")
+    void deveIgnorarCampoDesconhecido() {
         String json = """
                 {
                   "files": [],
@@ -78,7 +78,9 @@ class CodeReviewResponseParserTest {
                   "unknownField": "x"
                 }
                 """;
-        assertThatThrownBy(() -> parser.parse(json)).isInstanceOf(CodeReviewParseException.class);
+        CodeReviewAiResponse result = parser.parse(json);
+        assertThat(result).isNotNull();
+        assertThat(result.valid()).isTrue();
     }
 
     @Test

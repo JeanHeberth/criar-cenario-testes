@@ -21,6 +21,12 @@ public class PlanningPromptFactory {
                 - Indicar approvalRequirement para cada ação de arquivo
                 - Usar português do Brasil em todos os campos textuais
                 - Quando knowledge for PARTIAL ou EMPTY, incluir warnings explicando as limitações
+                - Se os testes planejados forem ler credenciais, URL base ou endpoint de
+                  variáveis de ambiente, incluir também uma ação CREATE para
+                  ".env.example" (componentType CONFIGURATION) listando os NOMES dessas
+                  variáveis, sem valores reais. Sem esse arquivo, quem for rodar os testes
+                  não tem como descobrir o que precisa configurar, e a execução falha por
+                  variável indefinida sem indicar qual.
 
                 Schema esperado:
                 {

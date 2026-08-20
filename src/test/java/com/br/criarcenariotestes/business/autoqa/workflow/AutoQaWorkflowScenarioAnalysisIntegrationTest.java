@@ -51,7 +51,7 @@ class AutoQaWorkflowScenarioAnalysisIntegrationTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
 
         when(discoveryService.discover(Path.of("/projeto"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
 
         List<AutoQaAgent> agents = new ArrayList<>(List.of(scenarioAgent, discoveryAgent));
         AnnotationAwareOrderComparator.sort(agents);
@@ -59,7 +59,7 @@ class AutoQaWorkflowScenarioAnalysisIntegrationTest {
         new AutoQaWorkflowService(agents).execute(context);
 
         verify(discoveryService).discover(Path.of("/projeto"));
-        verify(scenarioService).analyze("Cenário", discovery());
+        verify(scenarioService).analyze("Cenário", discovery(), null);
     }
 
     @Test
@@ -70,7 +70,7 @@ class AutoQaWorkflowScenarioAnalysisIntegrationTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
 
         when(discoveryService.discover(Path.of("/projeto"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
 
         new AutoQaWorkflowService(List.of(
                 new ProjectDiscoveryAgent(discoveryService),
@@ -94,7 +94,7 @@ class AutoQaWorkflowScenarioAnalysisIntegrationTest {
                 new ScenarioAnalysisAgent(scenarioService)
         )).execute(context);
 
-        verify(scenarioService, never()).analyze(any(), any());
+        verify(scenarioService, never()).analyze(any(), any(), any());
         assertThat(context.getStatus()).isEqualTo(AutoQaStatus.ERROR);
     }
 
@@ -106,7 +106,7 @@ class AutoQaWorkflowScenarioAnalysisIntegrationTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
 
         when(discoveryService.discover(Path.of("/projeto"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenThrow(new ScenarioAnalysisTechnicalException("falha"));
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenThrow(new ScenarioAnalysisTechnicalException("falha"));
 
         new AutoQaWorkflowService(List.of(
                 new ProjectDiscoveryAgent(discoveryService),
@@ -124,7 +124,7 @@ class AutoQaWorkflowScenarioAnalysisIntegrationTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
 
         when(discoveryService.discover(Path.of("/projeto"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
 
         new AutoQaWorkflowService(List.of(
                 new ProjectDiscoveryAgent(discoveryService),
@@ -143,7 +143,7 @@ class AutoQaWorkflowScenarioAnalysisIntegrationTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
 
         when(discoveryService.discover(Path.of("/projeto"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
 
         new AutoQaWorkflowService(List.of(
                 new ProjectDiscoveryAgent(discoveryService),

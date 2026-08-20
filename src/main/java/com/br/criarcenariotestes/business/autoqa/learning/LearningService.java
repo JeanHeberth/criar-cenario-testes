@@ -17,6 +17,8 @@ import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanRes
 import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
 import com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -35,6 +37,8 @@ import java.util.UUID;
  */
 @Service
 public class LearningService {
+
+    private static final Logger log = LoggerFactory.getLogger(LearningService.class);
 
     private static final Set<ExecutionStatus> OPERATIONAL_EXECUTION_STATUSES =
             EnumSet.of(ExecutionStatus.ERROR, ExecutionStatus.BLOCKED, ExecutionStatus.TIMED_OUT, ExecutionStatus.CANCELLED);
@@ -211,7 +215,17 @@ public class LearningService {
             }
         }
         if (response == null) {
-            throw new LearningTechnicalException("AI provider failed after fallback", lastError);
+            // Mesma política do UNSUPPORTED_SCOPE logo acima: descarta a
+            // contribuição da IA e segue com os itens determinísticos. Lançar
+            // aqui fazia o LEARNING derrubar um workflow que já tinha gerado,
+            // aplicado e executado os testes — nove etapas perdidas porque o
+            // provider de IA estava indisponível. Aprendizado é enriquecimento,
+            // não a entrega.
+            log.warn("Learning seguindo sem contribuição da IA. executionId={}, motivo='{}'",
+                    executionId, lastError == null ? "sem resposta" : lastError.getMessage());
+            LearningWarning warning = new LearningWarning("AI_LEARNING_UNAVAILABLE",
+                    "Aprendizado seguiu apenas com itens determinísticos: provider de IA indisponível", false);
+            return new AiOutcome(List.of(), List.of(warning));
         }
         return new AiOutcome(materialize(response), List.of());
     }

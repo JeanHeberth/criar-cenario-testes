@@ -296,16 +296,20 @@ class GenerationValidatorTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar reusedComponents inexistente no knowledge")
-    void deveRejeitarReuseInexistente() {
+    @DisplayName("Deve aceitar reusedComponents inexistente (rótulo, não código)")
+    void deveAceitarReuseInexistente() {
+        // reusedComponents é metadado de rastreabilidade: não decide o que vai
+        // para o disco. A IA ora usa caminho completo, ora só a classe, ora
+        // inventa um componente — reprovar a geração inteira por causa do rótulo
+        // custava uma rodada de IA sem proteger nada. O que define o código
+        // (framework, extensão, conteúdo, aderência ao plano) segue validado.
         var plan = GenerationTestData.readyPlan(GenerationTestData.createAction("tests/login.spec.ts", PlanComponentType.TEST));
         var file = new GeneratedFile("tests/login.spec.ts", GeneratedFileOperation.CREATE, PlanComponentType.TEST,
                 GenerationTestData.PLAYWRIGHT_CONTENT, "UTF-8", "hash", null, false,
                 List.of("pages/Inexistente.ts"), List.of(), List.of());
         var result = GenerationTestData.aiResult(GenerationStatus.COMPLETED, GenerationConfidence.HIGH, true, file);
 
-        assertThatThrownBy(() -> validate(result, GenerationTestData.playwrightDiscovery(), plan))
-                .isInstanceOf(GenerationValidationException.class);
+        assertThat(validate(result, GenerationTestData.playwrightDiscovery(), plan)).isSameAs(result);
     }
 
     @Test

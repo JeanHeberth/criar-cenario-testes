@@ -22,6 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
+import com.br.criarcenariotestes.business.autoqa.scenario.CenarioSalvoResolver;
+
 import java.util.Set;
 import java.util.UUID;
 
@@ -49,6 +51,15 @@ class AutoQaExecutionControllerTest {
     @MockitoBean
     private AutoQaExecutionResponseMapper mapper;
 
+    @MockitoBean
+    private CenarioSalvoResolver cenarioSalvoResolver;
+
+    /**
+     * O texto do cenário passou a ser resolvido antes do orchestrator (pode
+     * vir de um id salvo ou do texto avulso). Os testes que não tratam da
+     * origem só precisam que ele devolva algo.
+     */
+
     private UUID executionId;
     private AutoQaExecutionDocument document;
 
@@ -56,19 +67,20 @@ class AutoQaExecutionControllerTest {
     void setUp() {
         executionId = UUID.randomUUID();
         document = AutoQaExecutionDocument.createNew(executionId, "cenário", "/projeto/sensivel", Instant.now());
+        when(cenarioSalvoResolver.resolverTexto(any())).thenReturn("cenário");
         when(mapper.toResponse(any())).thenAnswer(inv -> {
             AutoQaExecutionDocument doc = inv.getArgument(0);
             return new AutoQaExecutionResponse(doc.getExecutionId(), doc.getScenarioSummary(), doc.getWorkflowStatus(),
                     doc.getCurrentStage(), doc.getLastStageStarted(), doc.getLastStageCompleted(), doc.getAttempt(),
                     doc.getProgress(), Set.of(), List.of(), List.of(), doc.getCreatedAt(), doc.getUpdatedAt(),
-                    doc.getStartedAt(), doc.getFinishedAt(), doc.getCancelledAt(), doc.getCancellationReason());
+                    doc.getStartedAt(), doc.getFinishedAt(), doc.getCancelledAt(), doc.getCancellationReason(), doc.getAutomationFramework());
         });
     }
 
     @Test
     @DisplayName("POST /executions deve retornar 201 Created")
     void createDeveRetornar201() throws Exception {
-        when(orchestrator.create("cenário", "/projeto")).thenReturn(document);
+        when(orchestrator.create("cenário", "/projeto", null, null)).thenReturn(document);
 
         mockMvc.perform(post("/api/auto-qa/executions")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -82,6 +94,12 @@ class AutoQaExecutionControllerTest {
     @Test
     @DisplayName("POST /executions deve retornar 400 quando scenario estiver em branco")
     void createDeveRetornar400ComScenarioEmBranco() throws Exception {
+        // Sem scenario e sem cenarioId não há o que automatizar - a regra
+        // agora vive no CenarioSalvoResolver, porque @NotBlank por campo não
+        // expressa "um OU outro".
+        when(cenarioSalvoResolver.resolverTexto(any()))
+                .thenThrow(new IllegalArgumentException("Informe cenarioId (cenário já salvo) ou scenario (texto)."));
+
         mockMvc.perform(post("/api/auto-qa/executions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -278,6 +296,6 @@ class AutoQaExecutionControllerTest {
 
     private AutoQaExecutionResponse sampleResponse() {
         return new AutoQaExecutionResponse(executionId, "cenário", AutoQaWorkflowStatus.CREATED, null, null, null,
-                0, 0, Set.of(), List.of(), List.of(), Instant.now(), Instant.now(), null, null, null, null);
+                0, 0, Set.of(), List.of(), List.of(), Instant.now(), Instant.now(), null, null, null, null, null);
     }
 }

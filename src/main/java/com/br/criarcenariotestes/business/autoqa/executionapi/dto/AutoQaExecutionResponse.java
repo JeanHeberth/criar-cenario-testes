@@ -31,6 +31,13 @@ public record AutoQaExecutionResponse(
         Instant startedAt,
         Instant finishedAt,
         Instant cancelledAt,
-        String cancellationReason
+        String cancellationReason,
+
+        /**
+         * Framework informado na criação. Público e não sensível — o painel de
+         * aprovação de execução usa para marcar só os comandos que fazem sentido
+         * neste projeto, em vez de oferecer os onze e deixar o usuário adivinhar.
+         */
+        String automationFramework
 ) {
 }

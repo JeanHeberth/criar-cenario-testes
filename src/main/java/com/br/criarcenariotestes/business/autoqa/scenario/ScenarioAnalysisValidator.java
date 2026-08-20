@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.autoqa.scenario;
 
+import com.br.criarcenariotestes.business.autoqa.security.PadroesDeConteudoProibido;
+
 import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.BusinessRule;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.RiskLevel;
@@ -21,13 +23,33 @@ import java.util.regex.Pattern;
 @Component
 public class ScenarioAnalysisValidator {
 
-    private static final Pattern UNIX_ABSOLUTE_PATH = Pattern.compile("(?<!\\S)/(?:[^\\s/]+/)*[^\\s/]+");
+    private static final Pattern UNIX_ABSOLUTE_PATH = PadroesDeConteudoProibido.CAMINHO_UNIX;
     private static final Pattern WINDOWS_ABSOLUTE_PATH = Pattern.compile("(?i)(?<!\\S)[A-Z]:[\\\\/](?:[^\\s\\\\/]+[\\\\/])*[^\\s\\\\/]+");
     private static final Pattern UNC_ABSOLUTE_PATH = Pattern.compile("(?<!\\S)\\\\\\\\[^\\s\\\\/]+\\\\[^\\s\\\\/]+(?:\\\\[^\\s\\\\/]+)*");
     private static final Pattern FILE_URI = Pattern.compile("(?i)(?<!\\S)file://\\S+");
-    private static final Pattern SECRET_PATTERN = Pattern.compile("(?i)(password|senha|token|api[_-]?key|apikey|secret)\\s*[:=]\\s*\\S+");
-    private static final Pattern CODE_PATTERN = Pattern.compile("(?i)\\b(class|import|public|private|protected|return|function|def|let|const|var|new)\\b|[;{}]|=>");
-    private static final Pattern COMMAND_PATTERN = Pattern.compile("(?i)\\b(curl|npm|yarn|pnpm|mvn|gradle|git|docker|kubectl|chmod|ssh)\\b");
+    /**
+     * Detecta código na análise (que deve ser texto em linguagem natural).
+     *
+     * ";" NÃO entra: ponto e vírgula é pontuação legítima em português, e
+     * incluí-lo reprovava frases perfeitamente válidas como "o usuário
+     * adiciona o produto; o sistema valida o estoque" - um falso positivo que
+     * descartava a análise inteira e travava o workflow.
+     *
+     * Chaves e "=>" continuam, porque não aparecem em prosa; e o ";" ainda é
+     * pego quando fecha uma linha de código de verdade (";" seguido de fim de
+     * linha), que é como ele aparece em Java/JS e não em texto corrido.
+     */
+    private static final Pattern CODE_PATTERN = PadroesDeConteudoProibido.CODIGO;
+    /**
+     * Comando de shell, identificado pelo FORMATO de invocação (começo de
+     * linha, com argumento), não pela simples menção ao nome da ferramenta.
+     *
+     * A versão anterior casava a palavra em qualquer posição, então descrever
+     * o projeto — "o projeto usa gradle", "a API é testada com curl" —
+     * reprovava a análise inteira. O risco que a regra endereça é o modelo
+     * devolver comandos executáveis, e isso tem forma reconhecível.
+     */
+    private static final Pattern COMMAND_PATTERN = PadroesDeConteudoProibido.COMANDO;
 
     public ScenarioAnalysisResult validate(ScenarioAnalysisResult result) {
         Objects.requireNonNull(result, "result must not be null");
@@ -106,7 +128,9 @@ public class ScenarioAnalysisValidator {
     }
 
     private void validateStatus(ScenarioAnalysisResult result) {
-        validateEnum(result.automationType(), "automationType");
+        if (result.automationType() == null) {
+            throw new ScenarioAnalysisValidationException("automationType ausente");
+        }
         validateEnum(result.status(), "status");
 
         boolean hasBlockingAmbiguity = result.ambiguities().stream().anyMatch(ScenarioAmbiguity::blocking);
@@ -223,7 +247,7 @@ public class ScenarioAnalysisValidator {
                 || FILE_URI.matcher(normalized).find()) {
             throw new ScenarioAnalysisValidationException("Caminho absoluto detectado");
         }
-        if (SECRET_PATTERN.matcher(normalized).find()) {
+        if (PadroesDeConteudoProibido.contemSegredoLiteral(normalized)) {
             throw new ScenarioAnalysisValidationException("Segredo aparente detectado");
         }
         if (CODE_PATTERN.matcher(normalized).find()) {

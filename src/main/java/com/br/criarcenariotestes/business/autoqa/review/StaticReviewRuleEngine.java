@@ -13,6 +13,7 @@ import com.br.criarcenariotestes.business.autoqa.model.review.ReviewCategory;
 import com.br.criarcenariotestes.business.autoqa.model.review.ReviewIssue;
 import com.br.criarcenariotestes.business.autoqa.model.review.ReviewRule;
 import com.br.criarcenariotestes.business.autoqa.model.review.ReviewSeverity;
+import com.br.criarcenariotestes.business.autoqa.security.PadroesDeConteudoProibido;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -24,14 +25,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/**
- * Validações determinísticas executadas antes da IA. Stateless, sem I/O, sem chamada
- * a provider de IA e sem correção de conteúdo — apenas produz achados (ReviewIssue).
- * Algumas regras (duplicidade, seletor frágil, método vazio) usam heurísticas de texto
- * em vez de AST completa, por limitação deliberada (ver relatório final da Fase 7).
- */
+
 @Component
 public class StaticReviewRuleEngine {
+
+    private static boolean temSegredoLiteral(String content) {
+        return PadroesDeConteudoProibido.contemSegredoLiteral(content);
+    }
 
     static final int FILE_TOO_LARGE_THRESHOLD = 8_000;
     static final int DUPLICATED_LINE_THRESHOLD = 3;
@@ -43,8 +43,6 @@ public class StaticReviewRuleEngine {
     private static final Pattern ABSOLUTE_UNC = Pattern.compile("^\\\\\\\\");
     private static final Pattern FILE_URI = Pattern.compile("(?i)^file://");
     private static final Pattern MARKDOWN_FENCE = Pattern.compile("```");
-    private static final Pattern SECRET_KEY_VALUE = Pattern.compile(
-            "(?i)\\b(password|senha|secret|apikey|api_key|private_key)\\b\\s*[:=]\\s*[\"']?[^\\s,;\"'`]{3,}");
     private static final Pattern CREDENTIAL_BEARER = Pattern.compile("(?i)bearer\\s+[a-z0-9._-]{8,}");
     private static final Pattern URL_WITH_CREDENTIALS = Pattern.compile(
             "(?i)[a-z][a-z0-9+.-]*://[^\\s/?#:@]+:[^\\s/?#@]+@");
@@ -57,8 +55,23 @@ public class StaticReviewRuleEngine {
     private static final Pattern GENERIC_EXCEPTION = Pattern.compile("catch\\s*\\(\\s*(Exception|Throwable|Error)\\s+\\w+\\s*\\)");
     private static final Pattern EMPTY_BLOCK = Pattern.compile("\\{\\s*\\}");
     private static final Pattern FRAGILE_SELECTOR = Pattern.compile(":nth-child|(>\\s*[\\w.#\\[\\]]+\\s*){3,}");
+    /**
+     * Três famílias de assertion escapavam e faziam teste Java legítimo virar
+     * MISSING_ASSERTION (HIGH), que trava o apply:
+     *
+     * - "Assertions\." só pega JUnit 5. TestNG e JUnit 4 usam "Assert." no
+     *   singular — e TestNG é o que este ecossistema usa. (Cuidado: escrever
+     *   "Assertions?\." NÃO resolve, porque o "?" recai sobre o "s" de
+     *   "Assertion", não sobre "ions" — é preciso agrupar.)
+     * - assertTrue/assertEquals/assertNotNull vindos de import estático não
+     *   têm prefixo de classe nenhum, e "assert " com espaço não os alcança.
+     * - "\.should\(" exige o parêntese colado, então .shouldBe(visible) e
+     *   .shouldHave(text) do Selenide não casavam; são justamente a forma
+     *   normal de assertar em Selenide, onde não existe assert avulso.
+     */
     private static final Pattern ASSERTION_EVIDENCE = Pattern.compile(
-            "expect\\(|assertThat|Assertions\\.|\\.should\\(|assert |Should Be|Should Contain");
+            "expect\\(|assertThat|Assert(?:ions)?\\.|assert[A-Za-z]*\\s*\\(|\\.should[A-Za-z]*\\("
+                    + "|assert |Should Be|Should Contain");
 
     private record FrameworkRule(Set<String> extensions, List<String> requiredAny, List<String> forbidden) {}
 
@@ -107,7 +120,30 @@ public class StaticReviewRuleEngine {
         for (GeneratedArtifactReader.ReadArtifact artifact : artifacts) {
             issues.addAll(reviewFile(framework, language, artifact));
         }
+        issues.addAll(reviewFrameworkEvidenceNoConjunto(framework, artifacts));
         return List.copyOf(issues);
+    }
+
+    /**
+     * Se NENHUM arquivo gerado carrega marca do framework, aí sim há
+     * incompatibilidade real — provavelmente foi gerado para o framework errado.
+     * Basta um arquivo com a evidência para o conjunto estar coerente.
+     */
+    private List<ReviewIssue> reviewFrameworkEvidenceNoConjunto(AutomationFramework framework,
+                                                                List<GeneratedArtifactReader.ReadArtifact> artifacts) {
+        FrameworkRule rule = FRAMEWORK_RULES.get(framework);
+        if (rule == null || artifacts == null || artifacts.isEmpty()) {
+            return List.of();
+        }
+        boolean algumComEvidencia = artifacts.stream()
+                .filter(a -> a != null && a.content() != null)
+                .anyMatch(a -> rule.requiredAny().stream().anyMatch(a.content()::contains));
+        if (algumComEvidencia) {
+            return List.of();
+        }
+        return List.of(issue(ReviewRule.FRAMEWORK_MISMATCH, ReviewCategory.FRAMEWORK_COMPATIBILITY, ReviewSeverity.HIGH,
+                null, null, "Nenhum arquivo gerado apresenta evidência do framework " + framework, null,
+                "Confirmar se a geração usou o framework do projeto"));
     }
 
     private List<ReviewIssue> reviewPlanAdherence(TechnicalPlanResult plan, GenerationResult generation) {
@@ -178,18 +214,21 @@ public class StaticReviewRuleEngine {
         }
 
         FrameworkRule rule = FRAMEWORK_RULES.get(framework);
-        if (rule != null) {
+        // Configuração (.env.example, config do runner) não segue as regras do
+        // framework: não tem a extensão dele nem seus imports. Cobrá-las gerava
+        // achado em arquivo auxiliar legítimo e travava o apply.
+        if (rule != null && artifact.componentType() != PlanComponentType.CONFIGURATION) {
             if (!rule.extensions().contains(extension)) {
                 issues.add(issue(ReviewRule.INVALID_EXTENSION, ReviewCategory.FRAMEWORK_COMPATIBILITY, ReviewSeverity.MEDIUM,
                         path, null, "Extensão incompatível com o framework " + framework, extension,
                         "Usar uma das extensões esperadas: " + rule.extensions()));
             } else if (!"json".equals(extension)) {
-                boolean hasEvidence = rule.requiredAny().stream().anyMatch(content::contains);
-                if (!hasEvidence) {
-                    issues.add(issue(ReviewRule.FRAMEWORK_MISMATCH, ReviewCategory.FRAMEWORK_COMPATIBILITY, ReviewSeverity.HIGH,
-                            path, null, "Nenhuma evidência do framework " + framework + " encontrada", null,
-                            "Confirmar se o arquivo pertence ao framework correto"));
-                }
+                // A evidência do framework é exigida no CONJUNTO (ver review()),
+                // não arquivo a arquivo: uma geração bem estruturada traz model,
+                // client de API e helper que legitimamente não referenciam o
+                // framework de teste — um "usuario.ts" é só uma interface. Exigir
+                // a marca em cada um marcava HIGH nesses arquivos e bloqueava o
+                // apply de um resultado correto.
                 for (String forbidden : rule.forbidden()) {
                     if (content.contains(forbidden)) {
                         issues.add(issue(ReviewRule.FRAMEWORK_MISMATCH, ReviewCategory.FRAMEWORK_COMPATIBILITY, ReviewSeverity.HIGH,
@@ -211,7 +250,7 @@ public class StaticReviewRuleEngine {
                     path, null, "Bloco Markdown encontrado no conteúdo gerado", "```", "Remover marcação Markdown do arquivo"));
         }
 
-        if (SECRET_KEY_VALUE.matcher(content).find()) {
+        if (temSegredoLiteral(content)) {
             issues.add(critical(ReviewRule.HARDCODED_SECRET, ReviewCategory.SECURITY, path, "Possível segredo hardcoded detectado"));
         }
         if (CREDENTIAL_BEARER.matcher(content).find() || URL_WITH_CREDENTIALS.matcher(content).find()) {

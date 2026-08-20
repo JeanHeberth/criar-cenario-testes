@@ -9,9 +9,12 @@ import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResu
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationStatus;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
 import com.br.criarcenariotestes.business.autoqa.model.planning.FileOperation;
+import com.br.criarcenariotestes.business.autoqa.model.planning.PlanComponentType;
 import com.br.criarcenariotestes.business.autoqa.model.planning.PlannedFileAction;
 import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
@@ -26,6 +29,8 @@ import java.util.regex.Pattern;
 
 @Component
 public class GenerationValidator {
+
+    private static final Logger log = LoggerFactory.getLogger(GenerationValidator.class);
 
     static final int MAX_CONTENT_LENGTH = 20_000;
     static final int MAX_TOTAL_CONTENT_LENGTH = 100_000;
@@ -102,14 +107,31 @@ public class GenerationValidator {
             }
         }
 
-        Set<String> existingComponentPaths = knowledge.components() == null ? Set.of() :
-                knowledge.components().stream()
-                        .filter(Objects::nonNull)
-                        .map(c -> c.relativePath())
-                        .collect(java.util.stream.Collectors.toSet());
+        // Aceita o componente pelo caminho completo OU pelo nome do arquivo/classe.
+        // A IA alterna entre "src/test/java/com/br/testes/MainPage.java" e só
+        // "MainPage" de uma geração para outra, e reusedComponents é metadado de
+        // rastreabilidade - não decide o que vai para o disco. Descartar a geração
+        // inteira por causa do formato do rótulo custava uma rodada de IA e não
+        // protegia nada.
+        Set<String> existingComponentPaths = new LinkedHashSet<>();
+        if (knowledge.components() != null) {
+            for (var component : knowledge.components()) {
+                if (component == null || component.relativePath() == null) continue;
+                String relativePath = component.relativePath();
+                existingComponentPaths.add(relativePath);
+                int slash = relativePath.lastIndexOf('/');
+                String fileName = slash >= 0 ? relativePath.substring(slash + 1) : relativePath;
+                existingComponentPaths.add(fileName);
+                int dot = fileName.lastIndexOf('.');
+                if (dot > 0) {
+                    existingComponentPaths.add(fileName.substring(0, dot));
+                }
+            }
+        }
 
         Set<String> seenPaths = new LinkedHashSet<>();
         long totalContentLength = 0;
+        boolean algumArquivoComEvidencia = false;
 
         for (int i = 0; i < result.files().size(); i++) {
             GeneratedFile file = result.files().get(i);
@@ -164,14 +186,42 @@ public class GenerationValidator {
                 throw new GenerationValidationException("Múltiplos arquivos concatenados detectados em " + path);
             }
 
-            validateExtension(path, rule);
-            validateFrameworkEvidence(path, content, rule);
+            // Arquivo de configuração (.env.example, playwright.config, etc.) não é
+            // código do framework: não tem a extensão dele nem carrega seus imports.
+            // Aplicar as regras de framework a ele reprovava a geração inteira por
+            // causa de um arquivo auxiliar legítimo.
+            boolean configuracao = file.componentType() == PlanComponentType.CONFIGURATION;
+            if (!configuracao) {
+                validateExtension(path, rule);
+            }
+            rejectIncompatibleFramework(path, content, rule);
+            if (!configuracao && hasFrameworkEvidence(path, content, rule)) {
+                algumArquivoComEvidencia = true;
+            }
 
+            // Referência inválida vira aviso, não reprovação: reusedComponents é
+            // rótulo de rastreabilidade e não decide o que vai para o disco. A IA
+            // ora escreve o caminho completo, ora só a classe, ora inventa um
+            // componente — e descartar a geração inteira por causa do rótulo
+            // custava uma rodada de IA sem proteger nada. O que decide o código
+            // continua validado: framework, extensão, conteúdo e plano.
             for (String reused : file.reusedComponents()) {
                 if (reused != null && !existingComponentPaths.contains(reused)) {
-                    throw new GenerationValidationException("reusedComponents referencia componente inexistente: " + reused);
+                    log.warn("reusedComponents referencia componente inexistente (ignorado). arquivo={}, referencia={}",
+                            path, reused);
                 }
             }
+        }
+
+        // A evidência do framework é exigida no CONJUNTO, não em cada arquivo.
+        // Num Page Object bem feito o framework fica encapsulado na page, e o
+        // teste só chama métodos dela - exigir a marca em todo arquivo
+        // reprovava exatamente o padrão que o projeto quer (POM), obrigando o
+        // teste a importar Selenide/WebDriver sem precisar. O que continua
+        // valendo por arquivo é a ausência de framework INCOMPATÍVEL.
+        if (!result.files().isEmpty() && !algumArquivoComEvidencia) {
+            throw new GenerationValidationException(
+                    "Nenhum arquivo gerado apresenta evidência do framework " + framework);
         }
 
         Set<String> uncovered = new LinkedHashSet<>(plannedCreateOrUpdate.keySet());
@@ -197,16 +247,16 @@ public class GenerationValidator {
         }
     }
 
-    private void validateFrameworkEvidence(String path, String content, FrameworkRule rule) {
+    private boolean hasFrameworkEvidence(String path, String content, FrameworkRule rule) {
         int dot = path.lastIndexOf('.');
         String extension = dot >= 0 ? path.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
         if ("json".equals(extension)) {
-            return;
+            return false;
         }
-        boolean hasEvidence = rule.requiredAny().stream().anyMatch(content::contains);
-        if (!hasEvidence) {
-            throw new GenerationValidationException("Nenhuma evidência do framework encontrada em " + path);
-        }
+        return rule.requiredAny().stream().anyMatch(content::contains);
+    }
+
+    private void rejectIncompatibleFramework(String path, String content, FrameworkRule rule) {
         for (String forbidden : rule.forbidden()) {
             if (content.contains(forbidden)) {
                 throw new GenerationValidationException("Evidência de framework incompatível detectada em " + path + ": " + forbidden);

@@ -88,8 +88,9 @@ public class PlanningService {
                     safeProviderName(active), primary.getClass().getSimpleName());
                 throw new PlanningTechnicalException("Falha técnica no planejamento", primary);
             }
-            log.warn("Planning primário falhou, tentando fallback. primaryProvider={}, fallbackProvider={}",
-                safeProviderName(active), safeProviderName(fallback));
+            log.warn("Planning primário falhou, tentando fallback. primaryProvider={}, fallbackProvider={}, failureType={}, failureMessage='{}'",
+                safeProviderName(active), safeProviderName(fallback),
+                primary.getClass().getSimpleName(), primary.getMessage());
             return planWithFallbackProvider(active, fallback, sys, user, primary, discovery, scenario, knowledge);
         }
     }

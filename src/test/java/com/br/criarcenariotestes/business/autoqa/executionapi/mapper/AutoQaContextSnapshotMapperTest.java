@@ -229,7 +229,12 @@ class AutoQaContextSnapshotMapperTest {
         AutoQaContext second = mapper.toContext(snapshot, "cenário", "/project");
 
         assertThat(first).isNotSameAs(second);
-        assertThat(first.getExecutionId()).isNotEqualTo(second.getExecutionId());
+        // O executionId, ao contrário da instância, TEM de ser o mesmo: é ele que
+        // localiza .auto-qa/generated/<executionId>/manifest.json entre GENERATION
+        // e APPLY, que rodam em requisições diferentes. Sortear um id novo aqui
+        // fazia o apply nunca achar o manifest e ser bloqueado sem gravar nada.
+        assertThat(first.getExecutionId()).isEqualTo(snapshot.getExecutionId());
+        assertThat(second.getExecutionId()).isEqualTo(snapshot.getExecutionId());
     }
 
     @Test

@@ -89,8 +89,8 @@ class PlanningResponseParserTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar campo desconhecido")
-    void deveRejeitarCampoDesconhecido() {
+    @DisplayName("Deve ignorar campo desconhecido")
+    void deveIgnorarCampoDesconhecido() {
         String json = """
             {
               "title": "Plano",
@@ -106,11 +106,12 @@ class PlanningResponseParserTest {
               "status": "READY",
               "confidence": "HIGH",
               "valid": true,
-              "unknownField": "should fail"
+              "unknownField": "should be ignored"
             }
             """;
-        assertThatThrownBy(() -> parser.parse(json))
-            .isInstanceOf(PlanningParseException.class);
+        TechnicalPlanResult result = parser.parse(json);
+        assertThat(result).isNotNull();
+        assertThat(result.valid()).isTrue();
     }
 
     @Test

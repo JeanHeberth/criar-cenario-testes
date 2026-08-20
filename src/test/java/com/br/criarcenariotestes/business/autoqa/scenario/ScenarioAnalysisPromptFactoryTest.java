@@ -30,6 +30,26 @@ class ScenarioAnalysisPromptFactoryTest {
     }
 
     @Test
+    @DisplayName("Deve instruir a não perguntar o canal quando ele foi informado")
+    void deveIncluirCanalInformado() {
+        String prompt = factory.createUserPrompt("Login válido", discovery(),
+                com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType.API);
+
+        assertThat(prompt).contains("Canal de automação DEFINIDO pelo usuário: API");
+        assertThat(prompt).contains("não registre ambiguidade");
+    }
+
+    @Test
+    @DisplayName("Sem canal informado, o prompt não menciona canal definido")
+    void deveOmitirCanalQuandoNaoInformado() {
+        assertThat(factory.createUserPrompt("Login válido", discovery(), null))
+                .doesNotContain("Canal de automação DEFINIDO");
+        assertThat(factory.createUserPrompt("Login válido", discovery(),
+                com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType.UNKNOWN))
+                .doesNotContain("Canal de automação DEFINIDO");
+    }
+
+    @Test
     @DisplayName("Deve incluir framework descoberto")
     void deveIncluirFrameworkDescoberto() {
         String prompt = factory.createUserPrompt("Login válido", discovery());

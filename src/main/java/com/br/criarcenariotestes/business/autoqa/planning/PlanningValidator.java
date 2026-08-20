@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.autoqa.planning;
 
+import com.br.criarcenariotestes.business.autoqa.security.PadroesDeConteudoProibido;
+
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.KnowledgeStatus;
 import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledgeResult;
@@ -14,12 +16,8 @@ import java.util.stream.Collectors;
 @Component
 public class PlanningValidator {
 
-    private static final Pattern CODE_PATTERN = Pattern.compile(
-        "(?i)\\b(class|import|public|private|protected|return|function|def|let|const|var|new)\\b|[;{}]|=>"
-    );
-    private static final Pattern COMMAND_PATTERN = Pattern.compile(
-        "(?i)\\b(curl|npm|yarn|gradle|git|docker|kubectl)\\b"
-    );
+    private static final Pattern CODE_PATTERN = PadroesDeConteudoProibido.CODIGO;
+    private static final Pattern COMMAND_PATTERN = PadroesDeConteudoProibido.COMANDO;
     private static final Pattern PATH_TRAVERSAL = Pattern.compile("\\.\\./");
     private static final Pattern ABSOLUTE_UNIX = Pattern.compile("^/");
     private static final Pattern ABSOLUTE_WINDOWS = Pattern.compile("(?i)^[A-Za-z]:\\\\");

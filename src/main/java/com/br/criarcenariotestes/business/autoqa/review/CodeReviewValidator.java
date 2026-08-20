@@ -11,6 +11,9 @@ import com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus;
 import com.br.criarcenariotestes.business.autoqa.model.review.ReviewSuggestion;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 import com.br.criarcenariotestes.business.autoqa.review.exception.CodeReviewValidationException;
+import com.br.criarcenariotestes.business.autoqa.security.PadroesDeConteudoProibido;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -31,14 +34,13 @@ import java.util.regex.Pattern;
 @Component
 public class CodeReviewValidator {
 
+    private static final Logger log = LoggerFactory.getLogger(CodeReviewValidator.class);
     private static final Pattern MARKDOWN_FENCE = Pattern.compile("```");
     private static final Pattern DIFF_MARKER = Pattern.compile("(?m)^(---|\\+\\+\\+|@@ )");
     private static final Pattern ABSOLUTE_UNIX = Pattern.compile("^/");
     private static final Pattern ABSOLUTE_WINDOWS = Pattern.compile("(?i)^[A-Za-z]:\\\\");
     private static final Pattern ABSOLUTE_UNC = Pattern.compile("^\\\\\\\\");
     private static final Pattern FILE_URI = Pattern.compile("(?i)^file://");
-    private static final Pattern SECRET_KEY_VALUE = Pattern.compile(
-            "(?i)\\b(password|senha|secret|apikey|api_key|private_key)\\b\\s*[:=]\\s*[\"']?[^\\s,;\"'`]{3,}");
 
     public CodeReviewAiResponse validate(CodeReviewAiResponse response,
                                           ProjectDiscoveryResult discovery,
@@ -131,20 +133,20 @@ public class CodeReviewValidator {
 
         switch (fileReview.status()) {
             case BLOCKED -> {
-                if (!hasCritical) throw new CodeReviewValidationException("BLOCKED requer issue CRITICAL: " + fileReview.relativePath());
+                if (!hasCritical) log.warn("AI status incoherence: BLOCKED sem issue CRITICAL. file={}", fileReview.relativePath());
             }
             case CHANGES_REQUIRED -> {
-                if (hasCritical) throw new CodeReviewValidationException("CHANGES_REQUIRED não deveria ter CRITICAL (deveria ser BLOCKED): " + fileReview.relativePath());
-                if (!hasHigh) throw new CodeReviewValidationException("CHANGES_REQUIRED requer issue HIGH: " + fileReview.relativePath());
+                if (hasCritical) log.warn("AI status incoherence: CHANGES_REQUIRED com CRITICAL. file={}", fileReview.relativePath());
+                if (!hasHigh) log.warn("AI status incoherence: CHANGES_REQUIRED sem issue HIGH. file={}", fileReview.relativePath());
             }
             case APPROVED -> {
-                if (hasCritical || hasHigh) throw new CodeReviewValidationException("APPROVED não pode ter issue HIGH/CRITICAL: " + fileReview.relativePath());
+                if (hasCritical || hasHigh) log.warn("AI status incoherence: APPROVED com issue HIGH/CRITICAL. file={}", fileReview.relativePath());
             }
             case APPROVED_WITH_WARNINGS -> {
-                if (hasCritical) throw new CodeReviewValidationException("APPROVED_WITH_WARNINGS não pode ter issue CRITICAL (deveria ser BLOCKED): " + fileReview.relativePath());
-                if (hasHigh) throw new CodeReviewValidationException("APPROVED_WITH_WARNINGS não pode ter issue HIGH (deveria ser CHANGES_REQUIRED): " + fileReview.relativePath());
+                if (hasCritical) log.warn("AI status incoherence: APPROVED_WITH_WARNINGS com CRITICAL. file={}", fileReview.relativePath());
+                if (hasHigh) log.warn("AI status incoherence: APPROVED_WITH_WARNINGS com HIGH. file={}", fileReview.relativePath());
             }
-            default -> { /* SKIPPED, INVALID: sem checagem estrutural adicional aqui */ }
+            default -> { /* SKIPPED, INVALID */ }
         }
     }
 
@@ -156,19 +158,19 @@ public class CodeReviewValidator {
 
         switch (response.status()) {
             case BLOCKED -> {
-                if (!hasCritical) throw new CodeReviewValidationException("status BLOCKED requer issue CRITICAL");
-                if (!response.humanReviewRequired()) throw new CodeReviewValidationException("status BLOCKED requer humanReviewRequired=true");
+                if (!hasCritical) log.warn("AI global status incoherence: BLOCKED sem issue CRITICAL");
+                if (!response.humanReviewRequired()) log.warn("AI global status incoherence: BLOCKED sem humanReviewRequired=true");
             }
             case CHANGES_REQUIRED -> {
-                if (hasCritical) throw new CodeReviewValidationException("status CHANGES_REQUIRED não deveria ter CRITICAL");
-                if (!hasHigh) throw new CodeReviewValidationException("status CHANGES_REQUIRED requer issue HIGH");
+                if (hasCritical) log.warn("AI global status incoherence: CHANGES_REQUIRED com CRITICAL");
+                if (!hasHigh) log.warn("AI global status incoherence: CHANGES_REQUIRED sem issue HIGH");
             }
             case APPROVED -> {
-                if (hasCritical || hasHigh) throw new CodeReviewValidationException("status APPROVED não pode ter issue HIGH/CRITICAL");
+                if (hasCritical || hasHigh) log.warn("AI global status incoherence: APPROVED com issue HIGH/CRITICAL");
             }
             case APPROVED_WITH_WARNINGS -> {
-                if (hasCritical) throw new CodeReviewValidationException("status APPROVED_WITH_WARNINGS não pode ter issue CRITICAL");
-                if (hasHigh) throw new CodeReviewValidationException("status APPROVED_WITH_WARNINGS não pode ter issue HIGH");
+                if (hasCritical) log.warn("AI global status incoherence: APPROVED_WITH_WARNINGS com CRITICAL");
+                if (hasHigh) log.warn("AI global status incoherence: APPROVED_WITH_WARNINGS com HIGH");
             }
             case INVALID -> {
                 if (response.valid()) throw new CodeReviewValidationException("status INVALID deve ter valid=false");
@@ -191,7 +193,7 @@ public class CodeReviewValidator {
         if (DIFF_MARKER.matcher(text).find()) {
             throw new CodeReviewValidationException("Marcador de diff/patch detectado em " + fieldName);
         }
-        if (SECRET_KEY_VALUE.matcher(text).find()) {
+        if (PadroesDeConteudoProibido.contemSegredoLiteral(text)) {
             throw new CodeReviewValidationException("Possível segredo detectado em " + fieldName);
         }
     }

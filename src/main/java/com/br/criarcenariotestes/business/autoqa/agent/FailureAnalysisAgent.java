@@ -53,8 +53,8 @@ public class FailureAnalysisAgent implements AutoQaAgent {
             log.info("Failure analysis agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success("Failure analysis: " + result.status());
         } catch (FailureAnalysisException ex) {
-            log.warn("Failure analysis agent failed. executionId={}, failureType={}",
-                    context.getExecutionId(), ex.getClass().getSimpleName());
+            log.warn("Failure analysis agent failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), ex.getClass().getSimpleName(), ex.getMessage());
             context.addError(ex.getMessage());
             return AgentExecutionResult.failure(ex.getMessage());
         }
