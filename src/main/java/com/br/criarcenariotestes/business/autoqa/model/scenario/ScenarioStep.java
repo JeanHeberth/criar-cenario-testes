@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.autoqa.model.scenario;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,6 +14,7 @@ public record ScenarioStep(
         int order,
         String action,
         String expectedResult,
+        @JsonDeserialize(contentUsing = TextoFlexivelDeserializer.class)
         List<String> dependencies
 ) {
     public ScenarioStep {

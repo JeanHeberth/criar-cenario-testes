@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.config;
 
+import com.br.criarcenariotestes.business.autoqa.scenario.CenarioSalvoResolver;
+
 import com.br.criarcenariotestes.business.autoqa.executionapi.mapper.AutoQaExecutionResponseMapper;
 import com.br.criarcenariotestes.business.autoqa.executionapi.orchestrator.AutoQaExecutionOrchestrator;
 import com.br.criarcenariotestes.business.autoqa.executionapi.service.AutoQaExecutionQueryService;
@@ -40,6 +42,9 @@ class CorsConfigEmptyOriginsTest {
 
     @MockitoBean
     private AutoQaExecutionResponseMapper mapper;
+
+    @MockitoBean
+    private CenarioSalvoResolver cenarioSalvoResolver;
 
     @Test
     @DisplayName("Nenhuma origem, nem mesmo localhost, deve receber autorização CORS quando a lista está vazia")

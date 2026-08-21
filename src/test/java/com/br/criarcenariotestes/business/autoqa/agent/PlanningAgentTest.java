@@ -135,7 +135,7 @@ class PlanningAgentTest {
 
         AgentExecutionResult result = agent.execute(context);
         assertThat(result.success()).isFalse();
-        assertThat(result.message()).isEqualTo("Falha no planejamento técnico");
+        assertThat(result.message()).startsWith("Falha no planejamento técnico: ");
     }
 
     @Test

@@ -22,6 +22,42 @@ public class PlanningPromptFactory {
                 - Usar português do Brasil em todos os campos textuais
                 - Quando knowledge for PARTIAL ou EMPTY, incluir warnings explicando as limitações
 
+                Estrutura de arquivos:
+                - SEMPRE separar a camada de interação do teste. O teste descreve o
+                  cenário; a camada de interação encapsula seletores, chamadas HTTP e
+                  detalhes do framework. O TIPO depende do canal:
+                    WEB_UI -> Page Object (componentType PAGE_OBJECT)
+                    API    -> API Client  (componentType API_CLIENT)
+                    MOBILE -> Screen Object (componentType PAGE_OBJECT)
+                  Não use "page object" em teste de API: não existe página ali.
+                - Agrupar por FUNCIONALIDADE, uma pasta por feature, com o teste e sua
+                  camada de interação JUNTOS na mesma pasta. Exemplos por framework:
+                    Playwright/Cypress (API) -> tests/api/<feature>/
+                    Playwright/Cypress (UI)  -> tests/e2e/<feature>/
+                    Selenide/Selenium/RestAssured -> src/test/java/<pacote>/<feature>/
+                    Robot -> tests/<feature>/ com recursos em resources/<feature>/
+                - EXCEÇÃO: infraestrutura compartilhada — autenticação/sessão e
+                  configuração base de HTTP — vai para pasta comum (ex.: tests/api/shared/
+                  ou o pacote equivalente), nunca duplicada por feature. Praticamente todo
+                  teste precisa de token; duplicar isso por funcionalidade é pior.
+                - Se o projeto JÁ TEM padrão de diretórios (informado no contexto), ele
+                  PREVALECE sobre os exemplos acima. Reorganizar um projeto existente não
+                  é papel do plano — fato observado ganha de convenção sugerida.
+                - Se os testes planejados forem ler variáveis de ambiente (credenciais,
+                  URL base, endpoint), SEMPRE incluir um warning listando os NOMES dessas
+                  variáveis. É por esse warning que quem roda os testes descobre o que
+                  precisa configurar.
+                - Só planejar CREATE de ".env.example" (componentType CONFIGURATION) se
+                  ele NÃO existir no projeto (confira o catálogo de componentes existentes).
+                  Quando já existe, NÃO o inclua no plano: o arquivo é documentação de
+                  setup, criada uma vez e mantida por quem cuida do projeto. Planejar
+                  CREATE sobre arquivo existente é recusado como conflito e bloqueia a
+                  aplicação do LOTE INTEIRO — inclusive dos testes, que estavam corretos.
+                - Quando planejar o ".env.example", usar valor VAZIO
+                  (ex.: "AUTH_PASSWORD="), nunca valores de exemplo: é a convenção do
+                  arquivo, e qualquer literal ali — mesmo fictício como "senha_teste123" —
+                  é tratado como possível segredo pela revisão.
+
                 Schema esperado:
                 {
                   "title": "string",
@@ -96,6 +132,26 @@ public class PlanningPromptFactory {
 
         if (!input.testingFrameworks().isEmpty()) {
             sb.append("Testing frameworks: ").append(String.join(", ", input.testingFrameworks())).append("\n");
+        }
+        if (input.automationType() != null) {
+            sb.append("Canal do teste: ").append(input.automationType()).append("\n");
+        }
+
+        // A convenção do projeto precisa CHEGAR ao modelo para poder prevalecer
+        // sobre o layout padrão. Ela já era coletada na etapa de Conhecimento,
+        // mas não era escrita no prompt — então o plano decidia caminhos sem
+        // saber como o projeto se organiza.
+        var convencao = input.namingConvention();
+        if (convencao != null) {
+            if (convencao.directoryPattern() != null && !convencao.directoryPattern().isBlank()) {
+                sb.append("Padrão de diretórios do projeto: ").append(convencao.directoryPattern()).append("\n");
+            }
+            if (convencao.testFilePattern() != null && !convencao.testFilePattern().isBlank()) {
+                sb.append("Padrão de nome de teste: ").append(convencao.testFilePattern()).append("\n");
+            }
+            if (convencao.pageObjectPattern() != null && !convencao.pageObjectPattern().isBlank()) {
+                sb.append("Padrão de camada de interação: ").append(convencao.pageObjectPattern()).append("\n");
+            }
         }
 
         sb.append("\nCenário:\n");

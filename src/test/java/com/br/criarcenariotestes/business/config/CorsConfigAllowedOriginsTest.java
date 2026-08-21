@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.config;
 
+import com.br.criarcenariotestes.business.autoqa.scenario.CenarioSalvoResolver;
+
 import com.br.criarcenariotestes.business.autoqa.executionapi.mapper.AutoQaExecutionResponseMapper;
 import com.br.criarcenariotestes.business.autoqa.executionapi.orchestrator.AutoQaExecutionOrchestrator;
 import com.br.criarcenariotestes.business.autoqa.executionapi.service.AutoQaExecutionQueryService;
@@ -48,6 +50,9 @@ class CorsConfigAllowedOriginsTest {
 
     @MockitoBean
     private AutoQaExecutionResponseMapper mapper;
+
+    @MockitoBean
+    private CenarioSalvoResolver cenarioSalvoResolver;
 
     @Test
     @DisplayName("Origem de desenvolvimento (localhost:4200) deve receber autorização CORS")

@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.autoqa.model.scenario;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -11,16 +13,20 @@ import java.util.List;
 public record ScenarioAnalysisResult(
         String title,
         String objective,
+        @JsonDeserialize(contentUsing = TextoFlexivelDeserializer.class)
         List<String> preconditions,
         List<ScenarioStep> steps,
         List<TestDataRequirement> testData,
         List<BusinessRule> businessRules,
         List<ScenarioRisk> risks,
         List<ScenarioAmbiguity> ambiguities,
+        @JsonDeserialize(contentUsing = TextoFlexivelDeserializer.class)
         List<String> entities,
+        @JsonDeserialize(contentUsing = TextoFlexivelDeserializer.class)
         List<String> dependencies,
         AutomationType automationType,
         ScenarioAnalysisStatus status,
+        @JsonDeserialize(contentUsing = TextoFlexivelDeserializer.class)
         List<String> warnings,
         boolean valid
 ) {

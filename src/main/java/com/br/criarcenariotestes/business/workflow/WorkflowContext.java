@@ -65,4 +65,18 @@ public class WorkflowContext {
         }
         return cenarios;
     }
+
+    /**
+     * Escreve de volta no MESMO campo de onde {@link #getCenariosFinais()}
+     * leria. Existe para que a segregação pré-persistência valha também para
+     * quem consome o contexto depois dela — em especial o ZephyrPublisher,
+     * que não pode publicar um cenário que acabou de ser descartado.
+     */
+    public void substituirCenariosFinais(List<CenarioItem> novos) {
+        if (cenariosRevisados != null && !cenariosRevisados.isEmpty()) {
+            this.cenariosRevisados = novos;
+        } else {
+            this.cenarios = novos;
+        }
+    }
 }

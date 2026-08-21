@@ -319,31 +319,125 @@ class QaWorkflowServiceTest {
     }
 
     @Test
-    @DisplayName("FASE15-BUG-003A: não deve persistir quando o cenário final não tiver estrutura BDD mínima (Dado/Quando)")
-    void naoDevePersistirQuandoCenarioFinalNaoTiverEstruturaBdd() {
-        // Arrange
+    @DisplayName("deve persistir com REVIEW_REQUIRED quando faltar keyword BDD, em vez de descartar")
+    void devePersistirComRevisaoNecessariaQuandoFaltarKeywordBdd() {
+        // O item é utilizável — tem nome, Passos e Resultado. A única falha é a
+        // ausência de "Dado"/"Quando", que é defeito de FORMATAÇÃO. Descartá-lo
+        // (comportamento anterior) jogava fora conteúdo bom sem recuperação
+        // possível, já que nesta etapa não há retry.
         mockAgentesHabilitados();
+        when(cenarioRepository.save(any(Cenario.class))).thenAnswer(inv -> {
+            Cenario c = inv.getArgument(0);
+            c.setId("id-teste");
+            return c;
+        });
         doAnswer(invocation -> {
             WorkflowContext ctx = invocation.getArgument(0);
             CenarioItem item = new CenarioItem();
             item.setNome("Login com credenciais válidas");
             item.setScriptTeste("O usuário acessa a tela e informa os dados"); // sem Dado/Quando
             item.setResultadoEsperado("Então o login é realizado com sucesso");
-            ctx.setCenarios(List.of(item));
+            ctx.setCenarios(new java.util.ArrayList<>(List.of(item)));
             return null;
         }).when(testScenarioAgent).executar(any());
 
-        // Act & Assert
-        assertThatThrownBy(() -> service.executarWorkflow(request, WorkflowType.COMPLETO))
-                .isInstanceOf(RuntimeException.class);
+        service.executarWorkflow(request, WorkflowType.COMPLETO);
 
-        verify(cenarioRepository, never()).save(any(Cenario.class));
+        ArgumentCaptor<Cenario> captor = ArgumentCaptor.forClass(Cenario.class);
+        verify(cenarioRepository).save(captor.capture());
 
-        // Regressão: publicar no Zephyr ANTES da validação estrutural criava
-        // casos de teste órfãos e permanentes no Zephyr para cenários que
-        // acabavam rejeitados e nunca persistidos aqui. Nunca deve publicar
-        // quando a validação falha.
-        verify(zephyrPublisherAgent, never()).executar(any());
+        List<CenarioItem> persistidos = captor.getValue().getCenarios();
+        assertThat(persistidos).hasSize(1);
+        assertThat(persistidos.get(0).getStatus())
+                .as("item malformado deve ficar visível e sinalizado, não sumir")
+                .isEqualTo("REVIEW_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("um cenário malformado não pode derrubar os cenários bons do mesmo lote")
+    void naoDeveDescartarLoteInteiroPorCausaDeUmCenarioMalformado() {
+        // Regressão do caso real: um lote foi inteiramente descartado porque UM
+        // cenário ficou sem "Quando" — a quebra de linha antes da keyword não
+        // foi inserida por causa da "/" em "e/ou". Treze cenários íntegros
+        // foram perdidos junto, depois de sete agentes já terem rodado.
+        mockAgentesHabilitados();
+        when(cenarioRepository.save(any(Cenario.class))).thenAnswer(inv -> {
+            Cenario c = inv.getArgument(0);
+            c.setId("id-teste");
+            return c;
+        });
+        doAnswer(invocation -> {
+            WorkflowContext ctx = invocation.getArgument(0);
+            ctx.setCenarios(new java.util.ArrayList<>(List.of(
+                    cenario("Login válido", "Dado que estou na tela\nQuando informo os dados", "Então autentica"),
+                    cenario("Campos vazios (email e/ou senha)", "O corpo vai vazio", "Então retorna 400"),
+                    cenario("Senha incorreta", "Dado um e-mail válido\nQuando informo senha errada", "Então retorna 401"))));
+            return null;
+        }).when(testScenarioAgent).executar(any());
+
+        service.executarWorkflow(request, WorkflowType.COMPLETO);
+
+        ArgumentCaptor<Cenario> captor = ArgumentCaptor.forClass(Cenario.class);
+        verify(cenarioRepository).save(captor.capture());
+
+        List<CenarioItem> persistidos = captor.getValue().getCenarios();
+        assertThat(persistidos).as("os três devem sobreviver").hasSize(3);
+        assertThat(persistidos)
+                .filteredOn(i -> "REVIEW_REQUIRED".equals(i.getStatus()))
+                .as("somente o malformado é sinalizado")
+                .extracting(CenarioItem::getNome)
+                .containsExactly("Campos vazios (email e/ou senha)");
+    }
+
+    @Test
+    @DisplayName("cenário sem conteúdo aproveitável é descartado sem levar os bons junto, e não vai ao Zephyr")
+    void deveDescartarApenasOItemInutilizavel() {
+        mockAgentesHabilitados();
+        List<CenarioItem> publicadosNoZephyr = new java.util.ArrayList<>();
+        doAnswer(inv -> {
+            WorkflowContext ctx = inv.getArgument(0);
+            publicadosNoZephyr.addAll(ctx.getCenariosFinais());
+            return null;
+        }).when(zephyrPublisherAgent).executar(any());
+        when(cenarioRepository.save(any(Cenario.class))).thenAnswer(inv -> {
+            Cenario c = inv.getArgument(0);
+            c.setId("id-teste");
+            return c;
+        });
+        doAnswer(invocation -> {
+            WorkflowContext ctx = invocation.getArgument(0);
+            ctx.setCenarios(new java.util.ArrayList<>(List.of(
+                    cenario("Login válido", "Dado que estou na tela\nQuando informo os dados", "Então autentica"),
+                    cenario("Item corrompido", "", ""))));
+            return null;
+        }).when(testScenarioAgent).executar(any());
+
+        service.executarWorkflow(request, WorkflowType.COMPLETO);
+
+        ArgumentCaptor<Cenario> captor = ArgumentCaptor.forClass(Cenario.class);
+        verify(cenarioRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getCenarios())
+                .extracting(CenarioItem::getNome)
+                .as("o item sem Passos nem Resultado não é persistido; o bom sim")
+                .containsExactly("Login válido");
+
+        // O publisher roda DEPOIS da segregação e lê do contexto. Se a lista
+        // filtrada não fosse escrita de volta, o item descartado viraria caso
+        // de teste real e permanente no board do Zephyr — lixo órfão que nunca
+        // chegou a ser persistido aqui.
+        assertThat(publicadosNoZephyr)
+                .extracting(CenarioItem::getNome)
+                .as("o descartado não pode chegar ao Zephyr")
+                .containsExactly("Login válido");
+    }
+
+    private CenarioItem cenario(String nome, String passos, String resultado) {
+        CenarioItem item = new CenarioItem();
+        item.setNome(nome);
+        item.setScriptTeste(passos);
+        item.setResultadoEsperado(resultado);
+        return item;
     }
 
     private void mockAgentesHabilitados() {

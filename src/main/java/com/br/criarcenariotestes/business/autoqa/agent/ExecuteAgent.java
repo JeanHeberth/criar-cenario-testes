@@ -100,8 +100,8 @@ public class ExecuteAgent implements AutoQaAgent {
             log.info("Execute agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return buildAgentResult(result);
         } catch (ExecutionValidationException | IllegalArgumentException exception) {
-            log.warn("Execute agent failed. executionId={}, failureType={}",
-                    context.getExecutionId(), exception.getClass().getSimpleName());
+            log.warn("Execute agent failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Execute agent finished. executionId={}, status=FAILED", context.getExecutionId());
             return AgentExecutionResult.failure("Falha na execução dos testes do projeto");
         }

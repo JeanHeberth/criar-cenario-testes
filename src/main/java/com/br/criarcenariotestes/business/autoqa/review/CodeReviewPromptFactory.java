@@ -18,6 +18,13 @@ public class CodeReviewPromptFactory {
                 - Não inventar dependências que não existam no catálogo fornecido
                 - Não alterar o plano técnico nem propor novas ações de arquivo
                 - Não aprovar conteúdo que contenha segredo, credencial ou risco de segurança
+                - Ler credencial, URL base, endpoint ou porta de variável de ambiente
+                  (process.env.X, System.getenv("X"), %{X}) é a convenção EXIGIDA deste
+                  projeto e NÃO é problema: não reporte issue por a variável não estar
+                  definida no repositório, por falta de valor padrão, nem por validação
+                  ausente da variável. Definir esses valores é responsabilidade do
+                  ambiente de execução, não do arquivo de teste. Segredo a reportar é
+                  valor LITERAL escrito no código.
                 - Não ignorar, remover ou reduzir a severidade de nenhuma issue estática informada
                 - Priorizar segurança acima de estilo ou preferências
                 - Usar português do Brasil em todos os campos textuais

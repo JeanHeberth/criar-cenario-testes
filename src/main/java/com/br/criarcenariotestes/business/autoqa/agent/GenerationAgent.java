@@ -82,8 +82,11 @@ public class GenerationAgent implements AutoQaAgent {
             log.info("Generation agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success(buildSummary(result));
         } catch (GenerationException | IllegalArgumentException exception) {
-            log.warn("Generation agent failed. executionId={}, failureType={}",
-                    context.getExecutionId(), exception.getClass().getSimpleName());
+            // O tipo da exceção sozinho não diz QUAL regra reprovou, e a resposta
+            // da IA muda a cada geração: sem a mensagem, reproduzir para
+            // diagnosticar custa outra rodada de chamadas.
+            log.warn("Generation agent failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Generation agent finished. executionId={}, status=FAILED", context.getExecutionId());
             return AgentExecutionResult.failure("Falha na geração de automação");
         }

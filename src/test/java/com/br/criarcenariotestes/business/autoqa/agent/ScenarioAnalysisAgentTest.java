@@ -71,7 +71,7 @@ class ScenarioAnalysisAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(service, never()).analyze(anyString(), any());
+        verify(service, never()).analyze(anyString(), any(), any());
     }
 
     @Test
@@ -83,11 +83,11 @@ class ScenarioAnalysisAgentTest {
         context.registerProjectDiscovery(discovery());
         ScenarioAnalysisResult analysis = analysis();
 
-        when(service.analyze("Cenário", discovery())).thenReturn(analysis);
+        when(service.analyze("Cenário", discovery(), null)).thenReturn(analysis);
 
         agent.execute(context);
 
-        verify(service).analyze("Cenário", discovery());
+        verify(service).analyze("Cenário", discovery(), null);
     }
 
     @Test
@@ -99,7 +99,7 @@ class ScenarioAnalysisAgentTest {
         context.registerProjectDiscovery(discovery());
         ScenarioAnalysisResult analysis = analysis();
 
-        when(service.analyze("Cenário", discovery())).thenReturn(analysis);
+        when(service.analyze("Cenário", discovery(), null)).thenReturn(analysis);
 
         agent.execute(context);
 
@@ -115,7 +115,7 @@ class ScenarioAnalysisAgentTest {
         context.registerProjectDiscovery(discovery());
         ScenarioAnalysisResult analysis = analysis();
 
-        when(service.analyze("Cenário", discovery())).thenReturn(analysis);
+        when(service.analyze("Cenário", discovery(), null)).thenReturn(analysis);
 
         AgentExecutionResult result = agent.execute(context);
 
@@ -130,7 +130,7 @@ class ScenarioAnalysisAgentTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
         context.registerProjectDiscovery(discovery());
 
-        when(service.analyze("Cenário", discovery())).thenThrow(new ScenarioAnalysisTechnicalException("falha"));
+        when(service.analyze("Cenário", discovery(), null)).thenThrow(new ScenarioAnalysisTechnicalException("falha"));
 
         AgentExecutionResult result = agent.execute(context);
 
@@ -145,7 +145,7 @@ class ScenarioAnalysisAgentTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
         context.registerProjectDiscovery(discovery());
 
-        when(service.analyze("Cenário", discovery())).thenThrow(new ScenarioAnalysisTechnicalException("falha"));
+        when(service.analyze("Cenário", discovery(), null)).thenThrow(new ScenarioAnalysisTechnicalException("falha"));
 
         agent.execute(context);
 
@@ -161,7 +161,7 @@ class ScenarioAnalysisAgentTest {
         context.registerProjectDiscovery(discovery());
         ScenarioAnalysisResult analysis = analysis();
 
-        when(service.analyze("Cenário muito longo com detalhes", discovery())).thenReturn(analysis);
+        when(service.analyze("Cenário muito longo com detalhes", discovery(), null)).thenReturn(analysis);
 
         AgentExecutionResult result = agent.execute(context);
 

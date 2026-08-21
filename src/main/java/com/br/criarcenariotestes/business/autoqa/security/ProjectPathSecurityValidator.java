@@ -78,6 +78,18 @@ public class ProjectPathSecurityValidator {
     }
 
     /**
+     * As raízes autorizadas já resolvidas, para quem precisa navegá-las (o
+     * seletor de pastas da tela do Auto QA) em vez de validar um caminho
+     * pronto. Exposta aqui de propósito: a resolução continua acontecendo num
+     * lugar só, e o navegador de pastas não pode reimplementar a política —
+     * fazer isso seria criar um caminho paralelo que ignora fail-closed e
+     * resolução de symlink.
+     */
+    public List<Path> listarRaizesAutorizadas() {
+        return resolveAuthorizedRoots();
+    }
+
+    /**
      * Cada root configurada é resolvida da mesma forma que projectPath
      * (absoluto, normalizado, symlink resolvido). Uma root que não existe,
      * não é diretório ou não pode ser resolvida é simplesmente ignorada —

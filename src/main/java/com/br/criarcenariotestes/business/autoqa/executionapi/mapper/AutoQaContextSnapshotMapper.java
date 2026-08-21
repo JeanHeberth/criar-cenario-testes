@@ -1,6 +1,8 @@
 package com.br.criarcenariotestes.business.autoqa.executionapi.mapper;
 
 import com.br.criarcenariotestes.business.autoqa.context.AutoQaContext;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationFramework;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import com.br.criarcenariotestes.business.autoqa.executionapi.exception.AutoQaSnapshotException;
 import com.br.criarcenariotestes.business.autoqa.executionapi.model.AutoQaStage;
 import com.br.criarcenariotestes.business.autoqa.executionapi.persistence.AutoQaExecutionSnapshot;
@@ -68,8 +70,19 @@ public class AutoQaContextSnapshotMapper {
     }
 
     public AutoQaContext toContext(AutoQaExecutionSnapshot snapshot, String scenario, String projectPath) {
+        return toContext(snapshot, scenario, projectPath, null);
+    }
+
+    public AutoQaContext toContext(AutoQaExecutionSnapshot snapshot, String scenario, String projectPath,
+                                    String automationType) {
+        return toContext(snapshot, scenario, projectPath, automationType, null);
+    }
+
+    public AutoQaContext toContext(AutoQaExecutionSnapshot snapshot, String scenario, String projectPath,
+                                    String automationType, String automationFramework) {
         Objects.requireNonNull(snapshot, "snapshot must not be null");
-        AutoQaContext context = AutoQaContext.create(scenario, projectPath);
+        AutoQaContext context = AutoQaContext.restore(scenario, projectPath, parseAutomationType(automationType),
+                parseEnum(AutomationFramework.class, automationFramework), snapshot.getExecutionId());
         Path path = Path.of(projectPath);
 
         try {
@@ -104,6 +117,28 @@ public class AutoQaContextSnapshotMapper {
             throw new AutoQaSnapshotException("Snapshot inconsistente ou incompleto para reidratação", ex);
         }
         return context;
+    }
+
+    /**
+     * Valor desconhecido vira null (deixa o discovery deduzir) em vez de
+     * quebrar a reidratação: o canal é uma preferência do usuário, não um
+     * invariante — uma execução antiga, ou um valor renomeado, não deve
+     * impedir que a execução continue.
+     */
+    private AutomationType parseAutomationType(String value) {
+        AutomationType parsed = parseEnum(AutomationType.class, value);
+        return parsed == AutomationType.UNKNOWN ? null : parsed;
+    }
+
+    private <E extends Enum<E>> E parseEnum(Class<E> tipo, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(tipo, value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private GenerationResult sanitizeGeneration(GenerationResult result) {

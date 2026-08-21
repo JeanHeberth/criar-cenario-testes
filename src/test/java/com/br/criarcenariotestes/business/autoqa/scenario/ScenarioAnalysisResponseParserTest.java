@@ -67,12 +67,13 @@ class ScenarioAnalysisResponseParserTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar campo desconhecido")
-    void deveRejeitarCampoDesconhecido() {
+    @DisplayName("Deve ignorar campo desconhecido")
+    void deveIgnorarCampoDesconhecido() {
         String json = validJson().replaceFirst("\\{", "{\"extra\":1,");
 
-        assertThatThrownBy(() -> parser.parse(json))
-                .isInstanceOf(ScenarioAnalysisParseException.class);
+        ScenarioAnalysisResult result = parser.parse(json);
+        assertThat(result).isNotNull();
+        assertThat(result.title()).isNotBlank();
     }
 
     @Test

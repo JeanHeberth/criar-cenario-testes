@@ -75,8 +75,8 @@ public class LearningAgent implements AutoQaAgent {
             log.info("Learning agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return buildAgentResult(result);
         } catch (LearningException ex) {
-            log.warn("Learning agent failed. executionId={}, failureType={}",
-                    context.getExecutionId(), ex.getClass().getSimpleName());
+            log.warn("Learning agent failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), ex.getClass().getSimpleName(), ex.getMessage());
             log.info("Learning agent finished. executionId={}, status=BLOCKED", context.getExecutionId());
             context.addError("Falha ao coletar aprendizado da execução");
             return AgentExecutionResult.failure("Falha ao coletar aprendizado da execução");

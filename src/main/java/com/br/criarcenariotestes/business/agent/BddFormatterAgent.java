@@ -73,7 +73,12 @@ public class BddFormatterAgent implements BaseAgent {
         }
 
         if (separacao.temResultados()) {
-            item.setResultadoEsperado(separacao.getResultadosFormatados());
+            // No Resultado a repetição é aparada mantendo UMA ocorrência: o
+            // texto ainda pertence a este campo, só não pode aparecer duas
+            // vezes. Nos Passos (abaixo) ela é removida por completo, porque
+            // ali não é o lugar dela.
+            item.setResultadoEsperado(
+                    removerRepeticaoNoFinal(separacao.getResultadosFormatados(), resultadoOriginal, 1));
         }
 
         removerDuplicacaoResultadoNoFinalDosPassos(item);
@@ -91,41 +96,59 @@ public class BddFormatterAgent implements BaseAgent {
      * próprio agente ao recombinar script+resultado antes de re-separar.
      */
     private void removerDuplicacaoResultadoNoFinalDosPassos(CenarioItem item) {
-        String resultado = item.getResultadoEsperado();
-        String script = item.getScriptTeste();
-        if (resultado == null || resultado.isBlank() || script == null || script.isBlank()) {
-            return;
+        String limpo = removerRepeticaoNoFinal(item.getScriptTeste(), item.getResultadoEsperado(), 0);
+        if (limpo != null && !limpo.equals(item.getScriptTeste())) {
+            item.setScriptTeste(limpo);
         }
+    }
 
-        String resultadoNucleo = PONTUACAO_FINAL.matcher(resultado.trim()).replaceAll("");
-        if (resultadoNucleo.isBlank()) {
-            return;
+    /**
+     * Apara, de forma determinística (sem NLP/semântica), repetições EXATAS de
+     * {@code nucleoBruto} coladas ao FINAL de {@code texto}, tolerando apenas
+     * diferença de pontuação terminal e whitespace.
+     *
+     * @param ocorrenciasAManter quantas cópias podem sobrar. 0 nos Passos (o
+     *        Resultado não pertence àquele campo); 1 no Resultado (pertence,
+     *        mas não pode duplicar). Nunca reduz o texto a vazio nem apaga a
+     *        última cópia quando ela é o texto inteiro.
+     */
+    private String removerRepeticaoNoFinal(String texto, String nucleoBruto, int ocorrenciasAManter) {
+        if (texto == null || texto.isBlank() || nucleoBruto == null || nucleoBruto.isBlank()) {
+            return texto;
         }
+        String nucleo = PONTUACAO_FINAL.matcher(nucleoBruto.trim()).replaceAll("");
+        if (nucleo.isBlank()) {
+            return texto;
+        }
+        Pattern noFinal = Pattern.compile("\\s*" + Pattern.quote(nucleo) + "[.!?;:]*\\s*$");
 
-        Pattern duplicacaoNoFinal = Pattern.compile(
-                "\\s*" + Pattern.quote(resultadoNucleo) + "[.!?;:]*\\s*$");
-
-        String scriptAtual = script;
-        while (true) {
-            String scriptNucleo = PONTUACAO_FINAL.matcher(scriptAtual.trim()).replaceAll("");
-            if (scriptNucleo.equals(resultadoNucleo)) {
-                // scriptTeste inteiro é igual ao resultado - não remove (apagaria o passo inteiro).
+        String atual = texto;
+        while (contarOcorrencias(atual, nucleo) > ocorrenciasAManter) {
+            String atualNucleo = PONTUACAO_FINAL.matcher(atual.trim()).replaceAll("");
+            if (atualNucleo.equals(nucleo)) {
                 break;
             }
-            Matcher matcher = duplicacaoNoFinal.matcher(scriptAtual);
+            Matcher matcher = noFinal.matcher(atual);
             if (!matcher.find()) {
                 break;
             }
-            String semDuplicacao = scriptAtual.substring(0, matcher.start()).trim();
+            String semDuplicacao = atual.substring(0, matcher.start()).trim();
             if (semDuplicacao.isBlank()) {
                 break;
             }
-            scriptAtual = semDuplicacao;
+            atual = semDuplicacao;
         }
+        return atual;
+    }
 
-        if (!scriptAtual.equals(script)) {
-            item.setScriptTeste(scriptAtual);
+    private int contarOcorrencias(String texto, String trecho) {
+        int total = 0;
+        int idx = 0;
+        while ((idx = texto.indexOf(trecho, idx)) != -1) {
+            total++;
+            idx += trecho.length();
         }
+        return total;
     }
 
     private String combinarTextos(String script, String resultado) {
@@ -189,20 +212,28 @@ public class BddFormatterAgent implements BaseAgent {
     }
     
     private String normalizarTexto(String texto) {
-        // FASE15-BUG-003: a IA às vezes escreve os passos como prosa corrida
-        // separada por ". " (mesmo padrão observado nos antigos passos
-        // numerados) em vez de uma linha por palavra-chave. Por isso a
-        // fronteira de quebra também precisa reconhecer pontuação de fim de
-        // frase (".", ";", ":") antes da keyword, não só letra/dígito.
+        // A IA nem sempre escreve uma linha por palavra-chave: já foram
+        // observados passos em prosa corrida separada por ". ", passos
+        // numerados e dados em TABELA MARKDOWN. Por isso o texto é achatado
+        // numa linha só e a quebra é reinserida antes de cada keyword.
+        //
+        // A fronteira é \S (qualquer não-espaço) de propósito. Antes era uma
+        // classe enumerada de caracteres "permitidos" e ela foi ampliada duas
+        // vezes na marra (".;:" e depois "|)]"), sempre depois de um cenário
+        // íntegro ser reprovado em produção. Enumerar caracteres é uma
+        // denylist: a IA sempre acha o próximo que falta — aspas de JSON no
+        // passo, vírgula, "}", hífen ou a "/" de "e/ou" derrubavam todos.
+        // Como o texto já foi achatado, "qualquer caractere antes do espaço"
+        // é a regra correta e não tem próximo furo.
         return texto
             .replaceAll("\\r", "")
             .replaceAll("\\s+", " ")
             // Quebrar antes de cada keyword BDD
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Dado que)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Dado)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Quando)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(Então)", "$1\n$2")
-            .replaceAll("([a-zA-ZÀ-ÿ0-9>.;:])\\s+(E)\\s+", "$1\n$2 ")
+            .replaceAll("(\\S)\\s+(Dado que)", "$1\n$2")
+            .replaceAll("(\\S)\\s+(Dado)", "$1\n$2")
+            .replaceAll("(\\S)\\s+(Quando)", "$1\n$2")
+            .replaceAll("(\\S)\\s+(Então)", "$1\n$2")
+            .replaceAll("(\\S)\\s+(E)\\s+", "$1\n$2 ")
             // Limpar espaços extras
             .replaceAll("\\n{2,}", "\n")
             .trim();

@@ -24,7 +24,18 @@ public class ProjectScanPolicy {
             ".idea",
             ".vscode",
             ".gradle",
-            "logs"
+            "logs",
+            // Diretórios de FERRAMENTA, não do projeto. Sem eles na lista, o
+            // scanner indexava .claude/api/auth/*.ts como se fossem componentes
+            // do projeto: o plano então concluía que os testes "já existiam" e
+            // gerava zero arquivos — e antes disso chegou a espelhar
+            // ".claude/api/auth/" como convenção de diretórios, gravando testes
+            // dentro da pasta de configuração do Claude Code.
+            ".claude",
+            ".github",
+            ".husky",
+            ".circleci",
+            ".devcontainer"
     );
 
     public int maxDepth() {

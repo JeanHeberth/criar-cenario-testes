@@ -40,7 +40,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(PlanningTestData.readyPlan());
 
@@ -55,7 +55,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(PlanningTestData.readyPlan());
 
@@ -71,7 +71,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(PlanningTestData.readyPlan());
 
@@ -86,7 +86,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any()))
             .thenThrow(new com.br.criarcenariotestes.business.autoqa.knowledge.ProjectKnowledgeValidationException("falha"));
 
@@ -102,7 +102,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any()))
+        when(mocks.scenarioService.analyze(any(), any(), any()))
             .thenThrow(new com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisTechnicalException("falha"));
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
@@ -145,7 +145,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any()))
             .thenThrow(new PlanningValidationException("plano inválido"));
@@ -162,7 +162,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(PlanningTestData.readyPlan());
 
@@ -179,7 +179,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         var mocks = mocks();
         ProjectDiscoveryResult d = discovery();
         when(mocks.discoveryService.discover(any())).thenReturn(d);
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(PlanningTestData.readyPlan());
 
@@ -194,7 +194,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         // PlanningAgent catches PlanningException, returns failure; workflow stops with ERROR
         when(mocks.planningService.plan(any(), any(), any()))
@@ -211,7 +211,7 @@ class AutoQaWorkflowPlanningIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(PlanningTestData.readyPlan());
 

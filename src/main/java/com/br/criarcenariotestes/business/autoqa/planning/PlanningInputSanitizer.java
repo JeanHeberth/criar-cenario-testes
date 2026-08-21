@@ -96,6 +96,7 @@ public class PlanningInputSanitizer {
             testingFrameworks,
             detectedFrameworks,
             discovery.getConfidence(),
+            scenario.automationType(),
             scenario.title(),
             scenario.objective(),
             scenario.preconditions() != null ? scenario.preconditions() : List.of(),

@@ -101,7 +101,7 @@ class AutoQaWorkflowExecutionIntegrationTest {
 
         runFase1a6(context, mocks);
 
-        verify(mocks.scenarioService).analyze(any(), any());
+        verify(mocks.scenarioService).analyze(any(), any(), any());
     }
 
     @Test
@@ -391,7 +391,7 @@ class AutoQaWorkflowExecutionIntegrationTest {
 
     private void stubHappyPathAte6(Mocks mocks) {
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(readyPlan());
         when(mocks.generationService.generate(any(), any(), any(), any(), any())).thenReturn(generationResult());

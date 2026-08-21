@@ -13,6 +13,8 @@ import com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectKnowledg
 import com.br.criarcenariotestes.business.autoqa.model.learning.LearningResult;
 import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationFramework;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisResult;
 
 import java.time.LocalDateTime;
@@ -27,6 +29,10 @@ public class AutoQaContext {
     private final UUID executionId;
     private final String scenario;
     private final String projectPath;
+    /** Canal informado pelo usuário; null quando ele deixou a cargo do discovery. */
+    private final AutomationType informedAutomationType;
+    /** Framework informado pelo usuário; null quando deixado a cargo do discovery. */
+    private final AutomationFramework informedAutomationFramework;
     private final LocalDateTime startedAt;
     private LocalDateTime finishedAt;
     private AutoQaStatus status;
@@ -44,10 +50,19 @@ public class AutoQaContext {
     private final List<AgentExecutionResult> agentExecutions;
     private final List<String> errors;
 
-    private AutoQaContext(String scenario, String projectPath) {
-        this.executionId = UUID.randomUUID();
+    private AutoQaContext(String scenario, String projectPath, AutomationType informedAutomationType,
+                          AutomationFramework informedAutomationFramework, UUID executionId) {
+        this.informedAutomationFramework =
+                informedAutomationFramework == AutomationFramework.UNKNOWN ? null : informedAutomationFramework;
+        // Um id novo a cada reidratação quebrava o APPLY: a GENERATION grava o
+        // manifest em .auto-qa/generated/<executionId>/, e o APPLY - que roda
+        // em outra requisição, com o contexto reconstruído do snapshot -
+        // procurava sob um id sorteado na hora. O manifest nunca era achado,
+        // virava MANIFEST_MISMATCH e o apply era bloqueado sem gravar nada.
+        this.executionId = executionId == null ? UUID.randomUUID() : executionId;
         this.scenario = requireText(scenario, "scenario");
         this.projectPath = requireText(projectPath, "projectPath");
+        this.informedAutomationType = informedAutomationType == AutomationType.UNKNOWN ? null : informedAutomationType;
         this.startedAt = LocalDateTime.now();
         this.status = AutoQaStatus.CREATED;
         this.finishedAt = null;
@@ -67,7 +82,30 @@ public class AutoQaContext {
     }
 
     public static AutoQaContext create(String scenario, String projectPath) {
-        return new AutoQaContext(scenario, projectPath);
+        return new AutoQaContext(scenario, projectPath, null, null, null);
+    }
+
+    public static AutoQaContext create(String scenario, String projectPath, AutomationType informedAutomationType) {
+        return new AutoQaContext(scenario, projectPath, informedAutomationType, null, null);
+    }
+
+    public static AutoQaContext create(String scenario, String projectPath, AutomationType informedAutomationType,
+                                        AutomationFramework informedAutomationFramework) {
+        return new AutoQaContext(scenario, projectPath, informedAutomationType, informedAutomationFramework, null);
+    }
+
+    /** Reidratação: preserva o executionId da execução persistida. */
+    public static AutoQaContext restore(String scenario, String projectPath, AutomationType informedAutomationType,
+                                         AutomationFramework informedAutomationFramework, UUID executionId) {
+        return new AutoQaContext(scenario, projectPath, informedAutomationType, informedAutomationFramework, executionId);
+    }
+
+    public AutomationType getInformedAutomationType() {
+        return informedAutomationType;
+    }
+
+    public AutomationFramework getInformedAutomationFramework() {
+        return informedAutomationFramework;
     }
 
     public UUID getExecutionId() {

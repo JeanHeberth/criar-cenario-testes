@@ -233,8 +233,8 @@ class LearningServiceTest {
     }
 
     @Test
-    @DisplayName("Falha técnica em ambos os providers deve lançar LearningTechnicalException")
-    void falhaTecnicaEmAmbosProvidersDeveLancar() {
+    @DisplayName("Falha técnica em ambos os providers segue com itens determinísticos e avisa")
+    void falhaTecnicaEmAmbosProvidersSegueComDeterministicos() {
         AiProviderResolver resolver = mock(AiProviderResolver.class);
         AiProvider primary = mock(AiProvider.class);
         AiProvider fallback = mock(AiProvider.class);
@@ -247,10 +247,14 @@ class LearningServiceTest {
         LearningService service = new LearningService(resolver);
         UUID id = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.learn(id, GenerationTestData.playwrightDiscovery(), scenario(), knowledge(),
-                plan(), generation(id), review(ReviewStatus.APPROVED_WITH_WARNINGS), apply(id), execution(id), noFailure(id)))
-                .isInstanceOf(com.br.criarcenariotestes.business.autoqa.learning.exception.LearningTechnicalException.class);
+        // Aprendizado é enriquecimento, não a entrega: derrubar aqui perdia o
+        // resultado de nove etapas já concluídas (geração, aplicação, execução)
+        // só porque o provider de IA estava fora.
+        LearningResult resultado = service.learn(id, GenerationTestData.playwrightDiscovery(), scenario(), knowledge(),
+                plan(), generation(id), review(ReviewStatus.APPROVED_WITH_WARNINGS), apply(id), execution(id), noFailure(id));
 
+        assertThat(resultado).isNotNull();
+        assertThat(resultado.warnings()).anyMatch(w -> "AI_LEARNING_UNAVAILABLE".equals(w.code()));
         verify(fallback, times(1)).gerarResposta(anyString(), anyString());
     }
 
@@ -663,9 +667,10 @@ class LearningServiceTest {
         LearningService service = new LearningService(resolver);
         UUID id = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.learn(id, GenerationTestData.playwrightDiscovery(), scenario(), knowledge(),
-                plan(), generation(id), review(ReviewStatus.APPROVED_WITH_WARNINGS), apply(id), execution(id), noFailure(id)))
-                .isInstanceOf(com.br.criarcenariotestes.business.autoqa.learning.exception.LearningTechnicalException.class);
+        // O ponto do teste é a CONTAGEM de chamadas (uma por provider), que
+        // segue valendo agora que a falha vira aviso em vez de exceção.
+        service.learn(id, GenerationTestData.playwrightDiscovery(), scenario(), knowledge(),
+                plan(), generation(id), review(ReviewStatus.APPROVED_WITH_WARNINGS), apply(id), execution(id), noFailure(id));
 
         verify(primary, times(1)).gerarResposta(anyString(), anyString());
         verify(fallback, times(1)).gerarResposta(anyString(), anyString());

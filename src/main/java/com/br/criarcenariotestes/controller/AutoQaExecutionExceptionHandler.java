@@ -14,15 +14,20 @@ import org.springframework.web.context.request.WebRequest;
 import java.time.Instant;
 
 /**
- * Handler dedicado, escopado apenas a AutoQaExecutionController — nunca
+ * Handler dedicado, escopado aos controllers do Auto QA — nunca
  * altera o ApiExceptionHandler genérico existente. Qualquer exceção não
  * tratada aqui continua caindo no handler genérico (500 sanitizado). Nunca
  * retorna stacktrace, nome de classe interna ou projectPath absoluto.
  * @Order(HIGHEST_PRECEDENCE) garante que este handler mais específico seja
  * resolvido antes do ApiExceptionHandler genérico (ambos concorreriam em pé
  * de igualdade sem isso, já que nenhum dos dois declarava @Order antes).
+ *
+ * AutoQaPastasController entra no mesmo escopo porque compartilha o
+ * ProjectPathSecurityValidator: um caminho fora das raízes autorizadas precisa
+ * responder 403 ali também, e não o 500 genérico que sairia se ele ficasse de
+ * fora.
  */
-@RestControllerAdvice(assignableTypes = AutoQaExecutionController.class)
+@RestControllerAdvice(assignableTypes = {AutoQaExecutionController.class, AutoQaPastasController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AutoQaExecutionExceptionHandler {
 

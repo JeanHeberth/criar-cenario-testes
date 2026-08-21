@@ -1,6 +1,9 @@
 package com.br.criarcenariotestes.business.autoqa.executionapi.orchestrator;
 
 import com.br.criarcenariotestes.business.autoqa.context.AutoQaContext;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationFramework;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
+import com.br.criarcenariotestes.business.autoqa.model.scenario.CompatibilidadeFrameworkCanal;
 import com.br.criarcenariotestes.business.autoqa.executionapi.config.AutoQaProperties;
 import com.br.criarcenariotestes.business.autoqa.executionapi.exception.*;
 import com.br.criarcenariotestes.business.autoqa.executionapi.mapper.AutoQaContextSnapshotMapper;
@@ -64,8 +67,21 @@ public class AutoQaExecutionOrchestrator {
     }
 
     public AutoQaExecutionDocument create(String scenario, String projectPath) {
+        return create(scenario, projectPath, null);
+    }
+
+    public AutoQaExecutionDocument create(String scenario, String projectPath, String automationType) {
+        return create(scenario, projectPath, automationType, null);
+    }
+
+    public AutoQaExecutionDocument create(String scenario, String projectPath, String automationType,
+                                           String automationFramework) {
         Objects.requireNonNull(scenario, "scenario must not be null");
         Objects.requireNonNull(projectPath, "projectPath must not be null");
+        // Combinação impossível é recusada na criação, não no meio do pipeline:
+        // descobrir "REST Assured não abre navegador" depois de duas chamadas de
+        // IA custa tempo e dinheiro por um erro que se vê no formulário.
+        validarCompatibilidade(automationFramework, automationType);
         if (!properties.isEnabled()) {
             throw new AutoQaExecutionDisabledException("Auto QA está desabilitado (auto-qa.enabled=false)");
         }
@@ -76,7 +92,8 @@ public class AutoQaExecutionOrchestrator {
 
         UUID executionId = UUID.randomUUID();
         Instant now = Instant.now();
-        AutoQaExecutionDocument document = AutoQaExecutionDocument.createNew(executionId, scenario, projectPath, now);
+        AutoQaExecutionDocument document = AutoQaExecutionDocument.createNew(executionId, scenario, projectPath,
+                automationType, automationFramework, now);
         document.setAvailableActions(actionResolver.resolve(document, properties));
         document = saveWithLockHandling(document);
 
@@ -163,6 +180,34 @@ public class AutoQaExecutionOrchestrator {
 
     // --- internals ---
 
+    /**
+     * Valor irreconhecível é ignorado (vira "deduza pelo projeto") em vez de
+     * virar erro: só a combinação IMPOSSÍVEL entre framework e canal é recusada.
+     */
+    private void validarCompatibilidade(String automationFramework, String automationType) {
+        AutomationFramework framework = parseEnum(AutomationFramework.class, automationFramework);
+        AutomationType canal = parseEnum(AutomationType.class, automationType);
+        if (CompatibilidadeFrameworkCanal.compativel(framework, canal)) {
+            return;
+        }
+        String canaisAceitos = CompatibilidadeFrameworkCanal.canaisDe(framework).stream()
+                .map(Enum::name)
+                .collect(java.util.stream.Collectors.joining(", "));
+        throw new IllegalArgumentException(
+                "Framework " + framework + " não automatiza o canal " + canal + ". Canais aceitos: " + canaisAceitos);
+    }
+
+    private <E extends Enum<E>> E parseEnum(Class<E> tipo, String valor) {
+        if (valor == null || valor.isBlank()) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(tipo, valor.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
     private AutoQaExecutionDocument runBlock(UUID executionId, Consumer<AutoQaExecutionDocument> validate,
                                               List<AutoQaStage> block, AutoQaWorkflowStatus targetStatus) {
         AutoQaExecutionDocument document = loadDocument(executionId);
@@ -184,7 +229,8 @@ public class AutoQaExecutionOrchestrator {
         }
 
         AutoQaExecutionSnapshot snapshot = loadSnapshot(executionId);
-        AutoQaContext context = snapshotMapper.toContext(snapshot, document.getScenarioSummary(), document.getProjectPath());
+        AutoQaContext context = snapshotMapper.toContext(snapshot, document.getScenarioSummary(), document.getProjectPath(),
+                document.getAutomationType(), document.getAutomationFramework());
 
         AutoQaStageExecutor.AutoQaStageExecutionResult result;
         try {

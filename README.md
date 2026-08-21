@@ -168,6 +168,34 @@ Plans, ainda não implementado.
 um projeto Jira guarda-chuva e o Zephyr em outro lugar devem informar
 `projectKey` explicitamente — ele tem precedência.
 
+### Preview do destino (`GET /cenario/destino`)
+
+Resolve para onde a publicação vai **sem gerar nada**:
+
+```bash
+curl -G http://localhost:8089/cenario/destino \
+  --data-urlencode "taskRef=https://empresa.atlassian.net/browse/SCRUM-28"
+```
+
+```json
+{ "provedor": "JIRA", "identificador": "SCRUM-28",
+  "projectKey": "SCRUM", "pastaRaiz": "Postman", "valido": true, "motivo": null }
+```
+
+A tela usa isto ao sair do campo da tarefa, por dois motivos: descobrir que a
+referência está errada só depois da geração custa uma rodada inteira de
+chamadas de IA, e caso publicado no lugar errado não tem desfazer barato.
+
+Também devolve o `identificador` já normalizado — é o que evita o front
+reimplementar o parsing de URL que vive aqui. Referência inválida vem como
+`valido: false` com o `motivo`, não como erro HTTP: é resposta legítima de um
+preview.
+
+O preview aplica **exatamente a mesma precedência** da publicação real. Um
+preview que divergisse do comportamento seria pior que não ter preview.
+
+---
+
 ### Derivar a pasta da tarefa (`folder-strategy`)
 
 Em vez de configurar a pasta por ambiente ou informá-la em cada pedido, ela

@@ -80,8 +80,8 @@ class GenerationResponseParserTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar campo desconhecido")
-    void deveRejeitarCampoDesconhecido() {
+    @DisplayName("Deve ignorar campo desconhecido")
+    void deveIgnorarCampoDesconhecido() {
         String json = """
                 {
                   "files": [],
@@ -89,11 +89,12 @@ class GenerationResponseParserTest {
                   "status": "COMPLETED",
                   "confidence": "HIGH",
                   "valid": true,
-                  "unknownField": "should fail"
+                  "unknownField": "should be ignored"
                 }
                 """;
-        assertThatThrownBy(() -> parser.parse(json))
-                .isInstanceOf(GenerationParseException.class);
+        GenerationResult result = parser.parse(json);
+        assertThat(result).isNotNull();
+        assertThat(result.valid()).isTrue();
     }
 
     @Test

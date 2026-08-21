@@ -5,6 +5,7 @@ import com.br.criarcenariotestes.business.autoqa.executionapi.mapper.AutoQaExecu
 import com.br.criarcenariotestes.business.autoqa.executionapi.orchestrator.AutoQaExecutionOrchestrator;
 import com.br.criarcenariotestes.business.autoqa.executionapi.persistence.AutoQaExecutionDocument;
 import com.br.criarcenariotestes.business.autoqa.executionapi.service.AutoQaExecutionQueryService;
+import com.br.criarcenariotestes.business.autoqa.scenario.CenarioSalvoResolver;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -28,18 +29,26 @@ public class AutoQaExecutionController {
     private final AutoQaExecutionOrchestrator orchestrator;
     private final AutoQaExecutionQueryService queryService;
     private final AutoQaExecutionResponseMapper mapper;
+    private final CenarioSalvoResolver cenarioSalvoResolver;
 
     public AutoQaExecutionController(AutoQaExecutionOrchestrator orchestrator,
                                       AutoQaExecutionQueryService queryService,
-                                      AutoQaExecutionResponseMapper mapper) {
+                                      AutoQaExecutionResponseMapper mapper,
+                                      CenarioSalvoResolver cenarioSalvoResolver) {
         this.orchestrator = Objects.requireNonNull(orchestrator);
         this.queryService = Objects.requireNonNull(queryService);
         this.mapper = Objects.requireNonNull(mapper);
+        this.cenarioSalvoResolver = Objects.requireNonNull(cenarioSalvoResolver);
     }
 
     @PostMapping
     public ResponseEntity<AutoQaExecutionResponse> create(@Valid @RequestBody AutoQaCreateExecutionRequest request) {
-        AutoQaExecutionResponse response = mapper.toResponse(orchestrator.create(request.scenario(), request.projectPath()));
+        // O cenário pode vir de um id (o salvo na Lista de Cenários) ou como
+        // texto avulso; daqui para baixo o pipeline não sabe a diferença.
+        String scenario = cenarioSalvoResolver.resolverTexto(request);
+        AutoQaExecutionResponse response = mapper.toResponse(
+                orchestrator.create(scenario, request.projectPath(), request.automationType(),
+                        request.automationFramework()));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .location(URI.create("/api/auto-qa/executions/" + response.executionId()))
                 .body(response);

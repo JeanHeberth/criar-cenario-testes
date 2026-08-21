@@ -47,3 +47,8 @@ out/
 # Gradle
 .DS_Store
 .DS_Store
+
+# Artefatos gerados pelo Auto QA (manifests e conteúdo de arquivos por execução).
+# São subprodutos de execução, nunca fonte — e podem conter trechos de código do
+# projeto alvo.
+.auto-qa/
