@@ -30,7 +30,11 @@ public class KnowledgeScanPolicy {
                 DEFAULT_MAX_FILE_BYTES,
                 DEFAULT_MAX_TOTAL_BYTES,
                 Set.of(".ts", ".tsx", ".js", ".jsx", ".java", ".py", ".robot", ".resource", ".json", ".yaml", ".yml", ".properties"),
-                Set.of("node_modules", ".git", "dist", "build", "target", "out", "coverage", "playwright-report", "test-results", "allure-results", "allure-report", ".idea", ".vscode", ".gradle", "logs", "backups", ".auto-qa"),
+                Set.of("node_modules", ".git", "dist", "build", "target", "out", "coverage", "playwright-report", "test-results", "allure-results", "allure-report", ".idea", ".vscode", ".gradle", "logs", "backups", ".auto-qa",
+                        // Ferramenta, não projeto: indexar .claude fazia o plano
+                        // tratar exemplos e artefatos de configuração como
+                        // componentes existentes do projeto.
+                        ".claude", ".github", ".husky", ".circleci", ".devcontainer"),
                 Set.of(".env", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock"),
                 Set.of(".env."),
                 Set.of(".pem", ".key", ".crt", ".cer", ".p12", ".pfx", ".jks", ".keystore", ".mp4", ".mov", ".avi", ".mkv", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".zip", ".tar", ".gz", ".7z", ".rar", ".pdf")

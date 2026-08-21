@@ -167,6 +167,36 @@ class FileApplicationServiceTest {
         assertThat(result.backups()).isEmpty();
     }
 
+    @Test
+    @DisplayName("CREATE de CONFIGURATION já existente deve PULAR, sem bloquear o lote")
+    void createDeConfiguracaoJaExistenteDevePular() throws IOException {
+        // .env.example é documentação de setup: criada uma vez, mantida por quem
+        // cuida do projeto. Tratá-la como conflito bloqueava o lote inteiro — os
+        // testes, corretos e inéditos, não eram aplicados por causa dela.
+        Files.writeString(projectRoot.resolve(".env.example"), "BASE_URL=");
+        String hashConfig = writeGeneratedContent(".env.example", "BASE_URL=\nAUTH_USER=");
+        Files.createDirectories(projectRoot.resolve("src"));
+        String hashTeste = writeGeneratedContent("src/Novo.spec.ts", "conteudo novo");
+        writeManifest(List.of(
+                new GenerationManifest.GenerationManifestFile(".env.example", "CREATE", "CONFIGURATION", "GENERATED", hashConfig, false),
+                new GenerationManifest.GenerationManifestFile("src/Novo.spec.ts", "CREATE", "TEST", "GENERATED", hashTeste, false)));
+
+        GeneratedFile config = new GeneratedFile(".env.example", GeneratedFileOperation.CREATE,
+                PlanComponentType.CONFIGURATION, null, "UTF-8", hashConfig, GeneratedFileStatus.GENERATED,
+                false, List.of(), List.of(), List.of());
+
+        ApplyResult result = service.apply(executionId, discovery(), plan(),
+                generation(config, file("src/Novo.spec.ts", GeneratedFileOperation.CREATE, hashTeste, false)),
+                review(ReviewStatus.APPROVED), approval(ApplyOperation.CREATE));
+
+        assertThat(result.conflicts()).isEmpty();
+        // O teste inédito foi aplicado; a configuração existente ficou intacta.
+        assertThat(Files.readString(projectRoot.resolve("src/Novo.spec.ts"))).isEqualTo("conteudo novo");
+        assertThat(Files.readString(projectRoot.resolve(".env.example"))).isEqualTo("BASE_URL=");
+        assertThat(result.files()).anyMatch(f -> f.relativePath().equals(".env.example")
+                && f.status() == ApplyFileStatus.SKIPPED);
+    }
+
     // ---- UPDATE ----
 
     @Test

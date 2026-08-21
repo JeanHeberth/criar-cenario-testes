@@ -24,9 +24,12 @@ public class FailureAnalysisResponseParserTest {
     }
 
     @Test
-    void parseUnknownPropertyThrows() {
+    void parseUnknownPropertyIsIgnored() {
+        // Alinhado aos demais parsers do pipeline: campo extra da IA é ignorado.
+        // Rejeitar fazia o provider primário falhar sempre no parse e cair no
+        // fallback, escondendo a causa real atrás do erro do segundo provider.
         FailureAnalysisResponseParser p = new FailureAnalysisResponseParser();
         String json = "{\"unknown\": 1}";
-        assertThatThrownBy(() -> p.parse(json)).isInstanceOf(FailureAnalysisParseException.class);
+        assertThat(p.parse(json)).isNotNull();
     }
 }

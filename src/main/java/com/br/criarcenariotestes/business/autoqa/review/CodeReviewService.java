@@ -93,6 +93,16 @@ public class CodeReviewService {
 
         List<GeneratedArtifactReader.ReadArtifact> artifacts = artifactReader.readAll(executionId, generation);
 
+        // Geração sem arquivo novo é resultado LEGÍTIMO: quando o projeto já tem
+        // os componentes, o plano marca tudo como REUSE e nada é criado. Mandar
+        // lista vazia para a IA revisar fazia ela devolver INVALID (não há o que
+        // revisar), e o apply então recusava com "review-not-approved" — o
+        // workflow falhava justamente por ter acertado que não havia trabalho.
+        if (artifacts.isEmpty()) {
+            log.info("Review sem artefatos para revisar — geração reutilizou tudo. executionId={}", executionId);
+            return buildNothingToReviewResult(executionId, generation);
+        }
+
         List<ReviewIssue> integrityIssues = artifacts.stream()
                 .filter(a -> !a.hashMatches())
                 .map(a -> new ReviewIssue(ReviewRule.CONTENT_INTEGRITY_MISMATCH.name(), ReviewCategory.SECURITY, ReviewSeverity.CRITICAL,
@@ -246,6 +256,25 @@ public class CodeReviewService {
         return new CodeReviewResult(executionId, finalFiles, aiResponse.globalIssues(), aiResponse.suggestions(),
                 aiResponse.passedRules(), aiResponse.skippedRules(), aiResponse.warnings(),
                 globalStatus, aiResponse.confidence(), humanReviewRequired, valid);
+    }
+
+    /**
+     * Nada a revisar: todos os arquivos do plano já existiam e foram reutilizados.
+     * Aprova com aviso, para o APPLY seguir e o workflow concluir — em vez de
+     * tratar ausência de trabalho como reprovação.
+     */
+    private CodeReviewResult buildNothingToReviewResult(UUID executionId, GenerationResult generation) {
+        List<FileReviewResult> files = new ArrayList<>();
+        for (GeneratedFile file : generation.files()) {
+            if (file == null) continue;
+            files.add(new FileReviewResult(file.relativePath(), file.operation(), file.componentType(),
+                    FileReviewStatus.SKIPPED, List.of(), List.of(), List.of(), List.of(),
+                    ReviewConfidence.HIGH, true));
+        }
+        ReviewWarning aviso = new ReviewWarning("NOTHING_TO_REVIEW",
+                "Nenhum arquivo novo foi gerado: os componentes necessários já existem no projeto", false);
+        return new CodeReviewResult(executionId, files, List.of(), List.of(), List.of(), List.of(), List.of(aviso),
+                ReviewStatus.APPROVED_WITH_WARNINGS, ReviewConfidence.HIGH, false, true);
     }
 
     private CodeReviewResult buildBlockedResult(UUID executionId, GenerationResult generation, List<ReviewIssue> issues) {

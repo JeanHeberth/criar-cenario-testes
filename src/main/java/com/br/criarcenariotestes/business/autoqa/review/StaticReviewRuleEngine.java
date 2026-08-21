@@ -33,6 +33,13 @@ public class StaticReviewRuleEngine {
         return PadroesDeConteudoProibido.contemSegredoLiteral(content);
     }
 
+    /** .env.example, .env.sample, .env.template — arquivos cujo conteúdo É exemplo. */
+    private static boolean ehTemplateDeAmbiente(String path) {
+        if (path == null) return false;
+        String nome = path.substring(path.lastIndexOf('/') + 1).toLowerCase(java.util.Locale.ROOT);
+        return nome.startsWith(".env.") || nome.equals("env.example") || nome.endsWith(".env.example");
+    }
+
     static final int FILE_TOO_LARGE_THRESHOLD = 8_000;
     static final int DUPLICATED_LINE_THRESHOLD = 3;
     private static final int MIN_DUPLICATE_LINE_LENGTH = 12;
@@ -204,6 +211,12 @@ public class StaticReviewRuleEngine {
         String path = artifact.relativePath();
         String content = artifact.content();
         String extension = extensionOf(path);
+        // Arquivo de configuração (.env.example, config do runner) não é código do
+        // framework nem da linguagem: não tem a extensão de nenhum dos dois. As
+        // regras de compatibilidade não se aplicam a ele — cobrá-las gerava achado
+        // HIGH num auxiliar legítimo e travava o apply.
+        boolean configuracao = artifact.componentType() == PlanComponentType.CONFIGURATION
+                || ehTemplateDeAmbiente(path);
 
         if (PATH_TRAVERSAL.matcher(path).find()) {
             issues.add(critical(ReviewRule.PATH_TRAVERSAL, ReviewCategory.SECURITY, path, "Path traversal detectado no caminho gerado"));
@@ -217,7 +230,7 @@ public class StaticReviewRuleEngine {
         // Configuração (.env.example, config do runner) não segue as regras do
         // framework: não tem a extensão dele nem seus imports. Cobrá-las gerava
         // achado em arquivo auxiliar legítimo e travava o apply.
-        if (rule != null && artifact.componentType() != PlanComponentType.CONFIGURATION) {
+        if (rule != null && !configuracao) {
             if (!rule.extensions().contains(extension)) {
                 issues.add(issue(ReviewRule.INVALID_EXTENSION, ReviewCategory.FRAMEWORK_COMPATIBILITY, ReviewSeverity.MEDIUM,
                         path, null, "Extensão incompatível com o framework " + framework, extension,
@@ -239,7 +252,7 @@ public class StaticReviewRuleEngine {
             }
         }
 
-        if (!isExtensionCompatibleWithLanguage(language, extension)) {
+        if (!configuracao && !isExtensionCompatibleWithLanguage(language, extension)) {
             issues.add(issue(ReviewRule.LANGUAGE_MISMATCH, ReviewCategory.LANGUAGE_COMPATIBILITY, ReviewSeverity.HIGH,
                     path, null, "Extensão incompatível com a linguagem " + language, extension,
                     "Ajustar a extensão conforme a linguagem do projeto"));
@@ -251,7 +264,18 @@ public class StaticReviewRuleEngine {
         }
 
         if (temSegredoLiteral(content)) {
-            issues.add(critical(ReviewRule.HARDCODED_SECRET, ReviewCategory.SECURITY, path, "Possível segredo hardcoded detectado"));
+            // Em template de ambiente (.env.example e afins) o valor é placeholder
+            // POR DEFINIÇÃO — é o propósito do arquivo. Segue reportado, para o
+            // humano conferir, mas em MEDIUM: como CRITICAL bloqueava a aplicação
+            // e o arquivo é justamente o que documenta as variáveis, o pipeline
+            // inteiro parava por causa de "suaSenhaSegura123".
+            if (ehTemplateDeAmbiente(path)) {
+                issues.add(issue(ReviewRule.HARDCODED_SECRET, ReviewCategory.SECURITY, ReviewSeverity.MEDIUM,
+                        path, null, "Valor de exemplo em template de ambiente — confirmar que não é credencial real",
+                        null, "Preferir valor vazio (VARIAVEL=) em arquivos .env de exemplo"));
+            } else {
+                issues.add(critical(ReviewRule.HARDCODED_SECRET, ReviewCategory.SECURITY, path, "Possível segredo hardcoded detectado"));
+            }
         }
         if (CREDENTIAL_BEARER.matcher(content).find() || URL_WITH_CREDENTIALS.matcher(content).find()) {
             issues.add(critical(ReviewRule.HARDCODED_CREDENTIAL, ReviewCategory.SECURITY, path, "Possível credencial hardcoded detectada"));

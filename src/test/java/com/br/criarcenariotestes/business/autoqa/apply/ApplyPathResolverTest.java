@@ -128,4 +128,24 @@ class ApplyPathResolverTest {
 
         assertThat(Files.exists(root.resolve("novo"))).isFalse();
     }
+
+    @Test
+    void deveRejeitarGravacaoDentroDeDiretorioDeFerramenta(@TempDir Path root) {
+        // Regressão do caso real: com tests/ vazio, o scanner "detectou" .claude
+        // como padrão de diretórios e o apply gravou login.spec.ts lá dentro.
+        assertThatThrownBy(() -> resolver.resolve(root, ".claude/api/auth/login.spec.ts"))
+                .isInstanceOf(ApplyConflictException.class)
+                .hasMessageContaining(".claude");
+
+        assertThatThrownBy(() -> resolver.resolve(root, "node_modules/x/index.ts"))
+                .isInstanceOf(ApplyConflictException.class);
+    }
+
+    @Test
+    void devePermitirArquivoOcultoLegitimoNaRaiz(@TempDir Path root) {
+        // A barreira vale para SEGMENTOS DE DIRETÓRIO: .env.example e .gitignore
+        // são arquivos legítimos do projeto e não podem ser bloqueados.
+        assertThat(resolver.resolve(root, ".env.example")).isEqualTo(root.resolve(".env.example"));
+        assertThat(resolver.resolve(root, ".gitignore")).isEqualTo(root.resolve(".gitignore"));
+    }
 }

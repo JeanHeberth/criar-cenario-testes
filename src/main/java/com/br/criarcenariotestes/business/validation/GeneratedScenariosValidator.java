@@ -162,6 +162,26 @@ public class GeneratedScenariosValidator {
     }
 
     /**
+     * Um cenário é APROVEITÁVEL quando tem nome, Passos e Resultado Esperado —
+     * ou seja, quando um humano consegue ler e executar o teste. É o critério
+     * que separa "irrecuperável" (descartar) de "apenas malformado" (manter e
+     * marcar para revisão) na segregação pré-persistência.
+     *
+     * <p>Complementa exatamente {@link #validarRepresentacaoFinal}: a única
+     * reprovação de lá que sobra aqui como aproveitável é a falta das keywords
+     * Dado/Quando, que é defeito de FORMATAÇÃO, não de conteúdo. Esta classe
+     * declara no próprio Javadoc que sua verificação é estrutural e não
+     * semântica — não cabe a ela descartar conteúdo por causa de uma quebra de
+     * linha ausente.
+     */
+    public boolean temConteudoAproveitavel(CenarioItem item) {
+        return item != null
+                && temTexto(item.getNome())
+                && temTexto(item.getScriptTeste())
+                && temTexto(item.getResultadoEsperado());
+    }
+
+    /**
      * FASE15-BUG-005B: valida estruturalmente a rastreabilidade de evidência
      * declarada pelo Generator. Cenários legados (evidenceType nulo/vazio)
      * não possuem essa informação e não são invalidados por isso —
