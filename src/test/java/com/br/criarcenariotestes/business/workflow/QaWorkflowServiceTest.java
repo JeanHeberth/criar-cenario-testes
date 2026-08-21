@@ -393,6 +393,12 @@ class QaWorkflowServiceTest {
     @DisplayName("cenário sem conteúdo aproveitável é descartado sem levar os bons junto, e não vai ao Zephyr")
     void deveDescartarApenasOItemInutilizavel() {
         mockAgentesHabilitados();
+        List<CenarioItem> publicadosNoZephyr = new java.util.ArrayList<>();
+        doAnswer(inv -> {
+            WorkflowContext ctx = inv.getArgument(0);
+            publicadosNoZephyr.addAll(ctx.getCenariosFinais());
+            return null;
+        }).when(zephyrPublisherAgent).executar(any());
         when(cenarioRepository.save(any(Cenario.class))).thenAnswer(inv -> {
             Cenario c = inv.getArgument(0);
             c.setId("id-teste");
@@ -414,6 +420,15 @@ class QaWorkflowServiceTest {
         assertThat(captor.getValue().getCenarios())
                 .extracting(CenarioItem::getNome)
                 .as("o item sem Passos nem Resultado não é persistido; o bom sim")
+                .containsExactly("Login válido");
+
+        // O publisher roda DEPOIS da segregação e lê do contexto. Se a lista
+        // filtrada não fosse escrita de volta, o item descartado viraria caso
+        // de teste real e permanente no board do Zephyr — lixo órfão que nunca
+        // chegou a ser persistido aqui.
+        assertThat(publicadosNoZephyr)
+                .extracting(CenarioItem::getNome)
+                .as("o descartado não pode chegar ao Zephyr")
                 .containsExactly("Login válido");
     }
 
