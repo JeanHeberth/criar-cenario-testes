@@ -43,6 +43,15 @@ public class AutoQaExecutionDocument {
 
     private String scenarioSummary;
     private String projectPath;
+    /**
+     * Canal informado pelo usuário na criação (WEB_UI, API, ...); null quando
+     * ele deixou a dedução a cargo do discovery. Persistido porque o contexto
+     * é reidratado do snapshot a cada estágio — sem guardar, o canal se perderia
+     * entre o START e a análise de cenário.
+     */
+    private String automationType;
+    /** Framework informado na criação; null quando deixado a cargo do discovery. */
+    private String automationFramework;
 
     private AutoQaWorkflowStatus workflowStatus;
     private AutoQaStage currentStage;
@@ -69,10 +78,17 @@ public class AutoQaExecutionDocument {
     private Long version;
 
     public static AutoQaExecutionDocument createNew(UUID executionId, String scenarioSummary, String projectPath, Instant now) {
+        return createNew(executionId, scenarioSummary, projectPath, null, null, now);
+    }
+
+    public static AutoQaExecutionDocument createNew(UUID executionId, String scenarioSummary, String projectPath,
+                                                    String automationType, String automationFramework, Instant now) {
         AutoQaExecutionDocument document = new AutoQaExecutionDocument();
         document.executionId = executionId;
         document.scenarioSummary = scenarioSummary;
         document.projectPath = projectPath;
+        document.automationType = automationType;
+        document.automationFramework = automationFramework;
         document.workflowStatus = AutoQaWorkflowStatus.CREATED;
         document.operationStatus = AutoQaOperationStatus.IDLE;
         document.attempt = 0;

@@ -5,12 +5,15 @@ import com.br.criarcenariotestes.business.autoqa.planning.exception.PlanningPars
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import java.util.Objects;
 
 @Component
 public class PlanningResponseParser {
 
+    private static final Logger log = LoggerFactory.getLogger(PlanningResponseParser.class);
     static final int MAX_RESPONSE_LENGTH = 80_000;
 
     private final ObjectMapper objectMapper;
@@ -18,7 +21,8 @@ public class PlanningResponseParser {
     public PlanningResponseParser(ObjectMapper objectMapper) {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null")
                 .copy()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE, true);
     }
 
     public TechnicalPlanResult parse(String response) {
@@ -37,6 +41,9 @@ public class PlanningResponseParser {
         try {
             return objectMapper.readValue(json, TechnicalPlanResult.class);
         } catch (JsonProcessingException exception) {
+            log.warn("Planning parse failed. jacksonMessage='{}', jsonPreview='{}'",
+                    exception.getOriginalMessage(),
+                    json.length() > 500 ? json.substring(0, 500) + "..." : json);
             throw new PlanningParseException("JSON inválido", exception);
         }
     }

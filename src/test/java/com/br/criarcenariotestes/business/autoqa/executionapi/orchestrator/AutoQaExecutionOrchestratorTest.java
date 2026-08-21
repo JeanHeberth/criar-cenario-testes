@@ -69,7 +69,8 @@ class AutoQaExecutionOrchestratorTest {
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(snapshotRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(actionResolver.resolve(any(), any())).thenReturn(Set.of());
-        when(snapshotMapper.toContext(any(), any(), any())).thenReturn(AutoQaContext.create("cenário", "/projeto"));
+        when(snapshotMapper.toContext(any(), any(), any(), any(), any()))
+                .thenReturn(AutoQaContext.create("cenário", "/projeto"));
     }
 
     @Test
@@ -329,7 +330,8 @@ class AutoQaExecutionOrchestratorTest {
 
         orchestrator.continueExecution(executionId);
 
-        verify(snapshotMapper).toContext(snapshot, document.getScenarioSummary(), document.getProjectPath());
+        verify(snapshotMapper).toContext(snapshot, document.getScenarioSummary(), document.getProjectPath(),
+                document.getAutomationType(), document.getAutomationFramework());
     }
 
     @Test

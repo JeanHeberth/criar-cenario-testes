@@ -14,11 +14,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class QaWorkflowService {
+
+    /**
+     * Status já usado por corrigirSourceInexistente para o mesmo fim: o item
+     * fica visível e utilizável, mas sinalizado para olho humano.
+     *
+     * <p>O veredito WAIVED (aceite formal de um item em revisão) ainda NÃO
+     * existe: exigiria identidade do aprovador e data de expiração, que o
+     * sistema não modela hoje. Enquanto isso, REVIEW_REQUIRED é o estado final
+     * de quem foi rebaixado.
+     */
+    private static final String STATUS_REVISAO_NECESSARIA = "REVIEW_REQUIRED";
 
     private static final Logger log = LoggerFactory.getLogger(QaWorkflowService.class);
 
@@ -112,8 +124,12 @@ public class QaWorkflowService {
     }
 
     private CenarioResponse salvarResultado(WorkflowContext context) {
-        List<CenarioItem> cenariosFinais = context.getCenariosFinais();
-        validarCenariosFinaisAntesDePersistir(cenariosFinais);
+        SegregacaoFinal segregacao = segregarCenariosFinaisAntesDePersistir(context.getCenariosFinais());
+        List<CenarioItem> cenariosFinais = segregacao.mantidos();
+        // Escreve de volta ANTES do ZephyrPublisher: um cenário descartado
+        // aqui não pode virar caso de teste real no board do Zephyr.
+        context.substituirCenariosFinais(cenariosFinais);
+        segregacao.registrarEm(context);
 
         // Publica no Zephyr só DEPOIS da validação estrutural passar - nunca
         // antes. Publicar antes (como no pipeline genérico de agentes) cria
@@ -147,28 +163,98 @@ public class QaWorkflowService {
     }
 
     /**
-     * FASE15-BUG-003A: última barreira determinística antes da persistência.
-     * Nenhuma chamada de IA, nenhum retry — se algo estruturalmente inválido
-     * chegou até aqui (falha do Reviewer não capturada, item corrompido),
-     * falha explicitamente em vez de persistir e reportar falso sucesso.
+     * Última barreira determinística antes da persistência. Nenhuma chamada de
+     * IA, nenhum retry.
+     *
+     * <p>Antes isto era tudo-ou-nada: o primeiro item reprovado derrubava o
+     * lote inteiro. Um cenário íntegro cuja única falha era uma quebra de linha
+     * ausente descartava os outros treze — e nesta etapa não há recuperação
+     * possível, o Formatter já rodou e os agentes já consumiram os tokens.
+     * Descartar ali era perda pura.
+     *
+     * <p>A regra agora distingue o que é irrecuperável do que é apenas
+     * malformado, seguindo o padrão que já existia em
+     * {@code GeneratedScenariosValidator#corrigirSourceInexistente}: degradar o
+     * item, não matar o lote.
+     *
+     * <ul>
+     *   <li>sem nome, sem Passos ou sem Resultado — inutilizável: DESCARTA o item</li>
+     *   <li>com conteúdo, faltando Dado/Quando — utilizável, só mal formatado:
+     *       MANTÉM com status REVIEW_REQUIRED</li>
+     *   <li>nenhum sobrevivente — aí sim falha, como antes</li>
+     * </ul>
+     *
+     * <p>Nada é perdido em silêncio: o que foi descartado ou rebaixado vai para
+     * o log e para os metadados da execução. Lacuna silenciosa numa ferramenta
+     * de QA é pior que falha barulhenta — o usuário acharia que tem cobertura
+     * completa.
      */
-    private void validarCenariosFinaisAntesDePersistir(List<CenarioItem> cenarios) {
+    private SegregacaoFinal segregarCenariosFinaisAntesDePersistir(List<CenarioItem> cenarios) {
         if (cenarios == null || cenarios.isEmpty()) {
             throw new ValidacaoEstruturalException("Nenhum cenário válido para persistir.");
         }
 
+        List<CenarioItem> mantidos = new ArrayList<>();
+        List<String> descartados = new ArrayList<>();
+        List<String> rebaixados = new ArrayList<>();
+
         for (CenarioItem item : cenarios) {
             GeneratedScenariosValidator.ValidationResult resultado =
                     generatedScenariosValidator.validarRepresentacaoFinal(item);
-            if (!resultado.valido()) {
-                // Sem o texto reprovado, esta exceção só diz QUE falhou, não
-                // POR QUE — e como o conteúdo vem da IA e muda a cada geração,
-                // reproduzir para diagnosticar custa uma rodada inteira de
-                // chamadas. Logar o passo é o que permite corrigir a regra de
-                // validação (ou o BddFormatterAgent) na primeira ocorrência.
-                log.error("Validação final reprovou o cenário '{}'. motivo='{}'. scriptTeste=<<<{}>>> resultadoEsperado=<<<{}>>>",
-                        item.getNome(), resultado.motivo(), item.getScriptTeste(), item.getResultadoEsperado());
-                throw new ValidacaoEstruturalException("Validação final antes da persistência falhou: " + resultado.motivo());
+
+            if (resultado.valido()) {
+                mantidos.add(item);
+                continue;
+            }
+
+            // Sem o texto reprovado, o log só diria QUE falhou, não POR QUE — e
+            // como o conteúdo vem da IA e muda a cada geração, reproduzir para
+            // diagnosticar custa uma rodada inteira de chamadas.
+            if (generatedScenariosValidator.temConteudoAproveitavel(item)) {
+                item.setStatus(STATUS_REVISAO_NECESSARIA);
+                mantidos.add(item);
+                rebaixados.add(item.getNome() + " — " + resultado.motivo());
+                log.warn("Cenário rebaixado para {} na validação final. nome='{}', motivo='{}'. scriptTeste=<<<{}>>> resultadoEsperado=<<<{}>>>",
+                        STATUS_REVISAO_NECESSARIA, item.getNome(), resultado.motivo(),
+                        item.getScriptTeste(), item.getResultadoEsperado());
+            } else {
+                descartados.add(nomeOuAnonimo(item) + " — " + resultado.motivo());
+                log.error("Cenário DESCARTADO na validação final (sem conteúdo aproveitável). nome='{}', motivo='{}'. scriptTeste=<<<{}>>> resultadoEsperado=<<<{}>>>",
+                        nomeOuAnonimo(item), resultado.motivo(),
+                        item.getScriptTeste(), item.getResultadoEsperado());
+            }
+        }
+
+        if (mantidos.isEmpty()) {
+            throw new ValidacaoEstruturalException(
+                    "Validação final antes da persistência falhou: nenhum dos " + cenarios.size()
+                            + " cenários tem conteúdo aproveitável. " + String.join(" | ", descartados));
+        }
+
+        return new SegregacaoFinal(mantidos, descartados, rebaixados);
+    }
+
+    private String nomeOuAnonimo(CenarioItem item) {
+        return item != null && item.getNome() != null && !item.getNome().isBlank()
+                ? item.getNome()
+                : "(sem nome)";
+    }
+
+    /**
+     * Resultado da segregação. {@code rebaixados} e {@code descartados} trazem
+     * o motivo por item para que a origem apareça na resposta, e não só no log.
+     */
+    private record SegregacaoFinal(List<CenarioItem> mantidos,
+                                   List<String> descartados,
+                                   List<String> rebaixados) {
+
+        void registrarEm(WorkflowContext context) {
+            context.addMetadata("cenariosPersistidos", mantidos.size());
+            if (!rebaixados.isEmpty()) {
+                context.addMetadata("cenariosEmRevisao", rebaixados);
+            }
+            if (!descartados.isEmpty()) {
+                context.addMetadata("cenariosDescartados", descartados);
             }
         }
     }

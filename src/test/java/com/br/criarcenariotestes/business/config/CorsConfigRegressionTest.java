@@ -1,6 +1,7 @@
 package com.br.criarcenariotestes.business.config;
 
 import com.br.criarcenariotestes.business.service.CenarioService;
+import com.br.criarcenariotestes.business.service.DestinoPublicacaoService;
 import com.br.criarcenariotestes.controller.CenarioController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,9 @@ class CorsConfigRegressionTest {
 
     @MockitoBean
     private CenarioService cenarioService;
+
+    @MockitoBean
+    private DestinoPublicacaoService destinoPublicacaoService;
 
     @Test
     @DisplayName("CenarioController (fora do Auto QA) também autoriza a origem configurada globalmente")

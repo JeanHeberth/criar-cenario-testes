@@ -91,7 +91,7 @@ logging:
 
 auto-qa:
   enabled: true
-  allowed-roots: []
+  allowed-roots: ${AUTO_QA_ALLOWED_ROOTS:}
   max-files: 500
   max-file-size-kb: 500
   max-total-content-kb: 5000
@@ -102,8 +102,8 @@ auto-qa:
 
 
 
-  allow-command-execution: false
-  allow-file-application: false
-  sensitive-actions-enabled: false
+  allow-command-execution: ${AUTO_QA_ALLOW_COMMAND_EXECUTION:false}
+  allow-file-application: ${AUTO_QA_ALLOW_FILE_APPLICATION:false}
+  sensitive-actions-enabled: ${AUTO_QA_SENSITIVE_ACTIONS_ENABLED:false}
   retention-days: 30
   max-concurrent-executions: 5

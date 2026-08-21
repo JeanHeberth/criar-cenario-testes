@@ -115,7 +115,8 @@ class ScenarioAnalysisServiceTest {
         ScenarioAnalysisPromptFactory failingPromptFactory = Mockito.mock(ScenarioAnalysisPromptFactory.class);
         ScenarioAnalysisService service = newService(failingPromptFactory, parser, validator);
         when(failingPromptFactory.createSystemPrompt()).thenReturn("system");
-        when(failingPromptFactory.createUserPrompt(anyString(), Mockito.any(ProjectDiscoveryResult.class)))
+        when(failingPromptFactory.createUserPrompt(anyString(), Mockito.any(ProjectDiscoveryResult.class),
+                Mockito.any()))
                 .thenThrow(new NullPointerException("boom"));
 
         assertThatThrownBy(() -> service.analyze("Login válido", ScenarioAnalysisTestData.discovery()))

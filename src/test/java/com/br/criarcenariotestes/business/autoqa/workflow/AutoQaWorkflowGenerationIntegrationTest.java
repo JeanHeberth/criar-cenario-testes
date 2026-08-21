@@ -61,7 +61,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
 
-        verify(mocks.scenarioService).analyze(any(), any());
+        verify(mocks.scenarioService).analyze(any(), any(), any());
     }
 
     @Test
@@ -132,7 +132,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any()))
+        when(mocks.scenarioService.analyze(any(), any(), any()))
                 .thenThrow(new com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisTechnicalException("falha"));
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
@@ -146,7 +146,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any()))
                 .thenThrow(new com.br.criarcenariotestes.business.autoqa.knowledge.ProjectKnowledgeValidationException("falha"));
 
@@ -161,7 +161,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any()))
                 .thenThrow(new com.br.criarcenariotestes.business.autoqa.planning.exception.PlanningTechnicalException("falha"));
@@ -178,7 +178,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
         AutoQaContext context = context();
         var mocks = mocks();
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(readyPlan());
         when(mocks.generationService.generate(any(), any(), any(), any(), any()))
@@ -274,7 +274,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
 
     private void stubHappyPath(Mocks mocks) {
         when(mocks.discoveryService.discover(any())).thenReturn(discovery());
-        when(mocks.scenarioService.analyze(any(), any())).thenReturn(analysis());
+        when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(readyPlan());
         when(mocks.generationService.generate(any(), any(), any(), any(), any())).thenReturn(generationResult());

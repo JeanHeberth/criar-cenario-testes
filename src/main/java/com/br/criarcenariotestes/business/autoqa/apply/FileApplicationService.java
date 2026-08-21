@@ -16,6 +16,7 @@ import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyWarning;
 import com.br.criarcenariotestes.business.autoqa.model.apply.BackupRecord;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.ProjectDiscoveryResult;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GeneratedFile;
+import com.br.criarcenariotestes.business.autoqa.model.planning.PlanComponentType;
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanResult;
 import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
@@ -223,6 +224,20 @@ public class FileApplicationService {
 
         if (operation == ApplyOperation.CREATE) {
             if (Files.exists(target)) {
+                // Template de configuração que já existe é PULADO, não conflito.
+                // .env.example é documentação de setup: criada uma vez e mantida por
+                // quem cuida do projeto. Tratá-la como conflito bloqueava o LOTE
+                // INTEIRO — os testes, corretos e inéditos, deixavam de ser aplicados
+                // por causa de um arquivo acessório que já estava lá.
+                // Só vale para CONFIGURATION: sobrescrever teste em silêncio continua
+                // proibido, e por isso segue como conflito.
+                if (generatedFile.componentType() == PlanComponentType.CONFIGURATION) {
+                    log.info("Apply pulou configuração já existente. executionId={}, arquivo={}",
+                            executionId, generatedFile.relativePath());
+                    skippedFiles.add(new AppliedFile(generatedFile.relativePath(), operation, ApplyFileStatus.SKIPPED,
+                            null, null, false, null, List.of()));
+                    return;
+                }
                 conflicts.add(new ApplyConflict(generatedFile.relativePath(), ApplyConflict.TARGET_ALREADY_EXISTS,
                         "Arquivo alvo já existe para CREATE: " + generatedFile.relativePath()));
                 return;

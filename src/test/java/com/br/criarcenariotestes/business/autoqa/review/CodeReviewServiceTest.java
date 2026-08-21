@@ -101,6 +101,30 @@ class CodeReviewServiceTest {
 
     @Test
     @DisplayName("Deve bloquear sem chamar IA quando há issue CRITICAL estática")
+    void deveAprovarQuandoNaoHaArquivoParaRevisar() {
+        // Projeto que já tem os componentes: o plano marca tudo como REUSE e a
+        // geração não cria arquivo nenhum. Antes, a lista vazia ia para a IA,
+        // que devolvia INVALID — e o apply recusava com "review-not-approved".
+        // O workflow falhava por ter acertado que não havia trabalho a fazer.
+        UUID executionId = UUID.randomUUID();
+        GeneratedFile reusado = new GeneratedFile("tests/login.spec.ts", GeneratedFileOperation.REUSE,
+                PlanComponentType.TEST, null, "UTF-8", null, GeneratedFileStatus.SKIPPED, true,
+                List.of(), List.of(), List.of());
+        GenerationResult semArquivosNovos = new GenerationResult(executionId, "PLAYWRIGHT", "TYPESCRIPT",
+                List.of(reusado), List.of(), List.of(), "root", "manifest.json",
+                GenerationStatus.COMPLETED, GenerationConfidence.HIGH, true);
+
+        CodeReviewResult result = service.review(executionId, CodeReviewTestData.discovery(),
+                CodeReviewTestData.scenario(), GenerationTestData.completeKnowledge(),
+                plan("tests/login.spec.ts"), semArquivosNovos);
+
+        assertThat(result.status()).isEqualTo(ReviewStatus.APPROVED_WITH_WARNINGS);
+        assertThat(result.warnings()).anyMatch(w -> "NOTHING_TO_REVIEW".equals(w.code()));
+        verifyNoInteractions(aiProviderResolver);
+    }
+
+    @Test
+    @DisplayName("Deve bloquear sem chamar IA quando há issue estática CRITICAL")
     void deveBloquearSemChamarIaEmCritical() {
         UUID executionId = UUID.randomUUID();
         String contentComSegredo = GenerationTestData.PLAYWRIGHT_CONTENT + "\nconst password = \"SuperSecreta123\";\n";

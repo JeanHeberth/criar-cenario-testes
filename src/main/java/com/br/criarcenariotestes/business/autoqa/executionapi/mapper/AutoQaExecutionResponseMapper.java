@@ -47,7 +47,8 @@ public class AutoQaExecutionResponseMapper {
                 document.getStartedAt(),
                 document.getFinishedAt(),
                 document.getCancelledAt(),
-                document.getCancellationReason()
+                document.getCancellationReason(),
+                document.getAutomationFramework()
         );
     }
 

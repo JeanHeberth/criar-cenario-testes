@@ -35,11 +35,22 @@ class AutoQaRequestDtosValidationTest {
     }
 
     @Test
-    @DisplayName("AutoQaCreateExecutionRequest deve rejeitar scenario em branco")
-    void createExecutionRequestDeveRejeitarScenarioEmBranco() {
+    @DisplayName("scenario em branco não é mais violação de bean validation - a origem pode ser um cenarioId")
+    void scenarioEmBrancoNaoEhMaisViolacaoDeBeanValidation() {
+        // A obrigatoriedade virou "scenario OU cenarioId", que @NotBlank por
+        // campo não expressa. Quem valida isso é o CenarioSalvoResolver, e o
+        // 400 correspondente está coberto em AutoQaExecutionControllerTest.
         Set<ConstraintViolation<AutoQaCreateExecutionRequest>> violations =
                 validator.validate(new AutoQaCreateExecutionRequest(" ", "/projeto"));
-        assertThat(violations).isNotEmpty();
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    @DisplayName("AutoQaCreateExecutionRequest deve aceitar cenarioId como origem, sem scenario")
+    void createExecutionRequestDeveAceitarCenarioId() {
+        Set<ConstraintViolation<AutoQaCreateExecutionRequest>> violations =
+                validator.validate(new AutoQaCreateExecutionRequest(null, "68a1f0c2db2c9947d6eae6ab", "/projeto"));
+        assertThat(violations).isEmpty();
     }
 
     @Test

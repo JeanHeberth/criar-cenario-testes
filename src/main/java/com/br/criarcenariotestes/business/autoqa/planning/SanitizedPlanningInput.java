@@ -18,6 +18,13 @@ public record SanitizedPlanningInput(
     List<String> testingFrameworks,
     List<String> detectedFrameworks,
     DiscoveryConfidence discoveryConfidence,
+    /**
+     * Canal do teste. Decide o TIPO da camada de interação a planejar: Page
+     * Object para WEB_UI, API Client para API, Screen Object para MOBILE.
+     * Sem ele o plano não tinha como escolher, e "page object" num teste de
+     * API é abstração que não existe.
+     */
+    com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType automationType,
     String scenarioTitle,
     String scenarioObjective,
     List<String> scenarioPreconditions,

@@ -12,6 +12,8 @@ import com.br.criarcenariotestes.business.autoqa.model.planning.TechnicalPlanRes
 import com.br.criarcenariotestes.business.autoqa.model.generation.GenerationResult;
 import com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult;
 import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -20,6 +22,8 @@ import java.util.UUID;
 
 @Service
 public class FailureAnalysisService {
+
+    private static final Logger log = LoggerFactory.getLogger(FailureAnalysisService.class);
 
     private final ExecutionEvidenceExtractor extractor = new ExecutionEvidenceExtractor();
     private final FailureClassifier classifier = new FailureClassifier();
@@ -97,6 +101,20 @@ public class FailureAnalysisService {
             String systemPrompt = promptFactory.systemPrompt();
             String userPrompt = promptFactory.userPrompt(executionId, sanitizer.sanitizeEvidence(evidence), deterministic);
 
+            /**
+             * Falha da IA aqui é AVISO, não erro fatal. Dois motivos:
+             *
+             * 1. A análise já foi feita: 'deterministic' sai da execução real dos
+             *    testes. A IA seria enriquecimento — e hoje nem isso, porque
+             *    aiFindings é forçado a List.of() logo abaixo, ou seja, a resposta
+             *    é parseada e descartada.
+             * 2. Quando ela derrubava o estágio, um workflow que já tinha gerado,
+             *    aplicado e EXECUTADO os testes terminava como FAILED. Perdia-se o
+             *    resultado de nove etapas porque o comentário sobre a falha não veio.
+             *
+             * O caminho NO_PROVIDER logo acima já seguia exatamente esta política.
+             */
+            String falhaIa = null;
             AiProvider triedFallback = null;
             AiProvider primary = active;
             AiProvider secondary = fallback;
@@ -119,12 +137,23 @@ public class FailureAnalysisService {
                             triedFallback = secondary;
                             continue;
                         }
-                        throw new FailureAnalysisTechnicalException("AI provider failed", ex);
+                        falhaIa = descreverFalha(provider, ex);
+                        break;
                     } else {
                         // do not fallback for validation/semantic issues
-                        throw new FailureAnalysisTechnicalException("AI provider failed with non-retryable error", ex);
+                        falhaIa = descreverFalha(provider, ex);
+                        break;
                     }
                 }
+            }
+
+            if (falhaIa != null) {
+                log.warn("Failure analysis seguindo só com análise determinística. executionId={}, motivo='{}'",
+                        executionId, falhaIa);
+                return new FailureAnalysisResult(executionId, List.copyOf(deterministic), List.of(),
+                        List.copyOf(sanitizer.sanitizeEvidence(evidence)),
+                        List.of(new FailureWarning("AI_ANALYSIS_UNAVAILABLE", falhaIa)),
+                        FailureAnalysisStatus.INCONCLUSIVE, FailureConfidence.LOW, true, false, false, true);
             }
 
             List<FailureEvidence> sanitized = sanitizer.sanitizeEvidence(evidence);
@@ -142,5 +171,26 @@ public class FailureAnalysisService {
     private boolean responseBlank(Exception ex) {
         String msg = ex.getMessage();
         return msg != null && (msg.contains("blank") || msg.contains("null") || msg.contains("too large"));
+    }
+
+    /**
+     * Nomeia o provider e a causa real. A mensagem antiga ("AI provider failed
+     * with non-retryable error") aparecia na tela sem dizer QUAL provider nem
+     * POR QUÊ — e a causa concreta, "API key not valid", só existia no
+     * stacktrace do servidor. Chave inválida é problema de configuração: quem
+     * lê o erro precisa saber disso para agir.
+     */
+    private String descreverFalha(AiProvider provider, Exception ex) {
+        String nome = provider == null ? "desconhecido" : provider.getName();
+        String causa = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+        if (causa.contains("API key not valid") || causa.contains("API_KEY_INVALID")) {
+            return "Provider de IA '" + nome + "' recusou a chave de API (verifique a configuração da key)";
+        }
+        return "Falha no provider de IA '" + nome + "': " + resumir(causa);
+    }
+
+    private String resumir(String texto) {
+        String linha = texto.lines().findFirst().orElse(texto);
+        return linha.length() <= 200 ? linha : linha.substring(0, 200) + "...";
     }
 }

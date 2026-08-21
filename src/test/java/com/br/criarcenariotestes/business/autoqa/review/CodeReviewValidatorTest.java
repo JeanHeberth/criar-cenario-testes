@@ -73,81 +73,81 @@ class CodeReviewValidatorTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar CRITICAL sem status BLOCKED no arquivo")
-    void deveRejeitarCriticalSemBlocked() {
+    @DisplayName("Deve aceitar CRITICAL sem BLOCKED no arquivo (warn, não throw)")
+    void deveAceitarCriticalSemBlocked() {
         var issue = new ReviewIssue("HARDCODED_SECRET", ReviewCategory.SECURITY, ReviewSeverity.CRITICAL,
                 "tests/login.spec.ts", null, "segredo", null, "remover", true);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.APPROVED_WITH_WARNINGS, ReviewStatus.BLOCKED, true, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        assertThat(validate(response, "tests/login.spec.ts")).isSameAs(response);
     }
 
     @Test
-    @DisplayName("Deve rejeitar HIGH com status APPROVED no arquivo")
-    void deveRejeitarHighComApproved() {
+    @DisplayName("Deve aceitar HIGH com APPROVED no arquivo (warn, não throw)")
+    void deveAceitarHighComApproved() {
         var issue = new ReviewIssue("MISSING_ASSERTION", ReviewCategory.ASSERTION, ReviewSeverity.HIGH,
                 "tests/login.spec.ts", null, "sem assertion", null, "adicionar", false);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.APPROVED, ReviewStatus.CHANGES_REQUIRED, false, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        assertThat(validate(response, "tests/login.spec.ts")).isSameAs(response);
     }
 
     @Test
-    @DisplayName("Deve rejeitar status global APPROVED com issue HIGH")
-    void deveRejeitarApprovedGlobalComHigh() {
+    @DisplayName("Deve aceitar status global APPROVED com issue HIGH (warn, não throw)")
+    void deveAceitarApprovedGlobalComHigh() {
         var issue = new ReviewIssue("MISSING_ASSERTION", ReviewCategory.ASSERTION, ReviewSeverity.HIGH,
                 "tests/login.spec.ts", null, "sem assertion", null, "adicionar", false);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.CHANGES_REQUIRED, ReviewStatus.APPROVED, false, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        assertThat(validate(response, "tests/login.spec.ts")).isSameAs(response);
     }
 
     @Test
-    @DisplayName("Deve rejeitar status global APPROVED com issue CRITICAL")
-    void deveRejeitarApprovedGlobalComCritical() {
+    @DisplayName("Deve aceitar status global APPROVED com issue CRITICAL (warn, não throw)")
+    void deveAceitarApprovedGlobalComCritical() {
         var issue = new ReviewIssue("HARDCODED_SECRET", ReviewCategory.SECURITY, ReviewSeverity.CRITICAL,
                 "tests/login.spec.ts", null, "segredo", null, "remover", true);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.BLOCKED, ReviewStatus.APPROVED, true, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        assertThat(validate(response, "tests/login.spec.ts")).isSameAs(response);
     }
 
     @Test
-    @DisplayName("Deve rejeitar BLOCKED sem issue CRITICAL")
-    void deveRejeitarBlockedSemCritical() {
+    @DisplayName("Deve aceitar BLOCKED sem issue CRITICAL (warn, não throw)")
+    void deveAceitarBlockedSemCritical() {
         var issue = new ReviewIssue("MISSING_ASSERTION", ReviewCategory.ASSERTION, ReviewSeverity.HIGH,
                 "tests/login.spec.ts", null, "sem assertion", null, "adicionar", false);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.CHANGES_REQUIRED, ReviewStatus.BLOCKED, true, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        assertThat(validate(response, "tests/login.spec.ts")).isSameAs(response);
     }
 
     @Test
-    @DisplayName("Deve rejeitar status global incoerente (CHANGES_REQUIRED sem HIGH/CRITICAL)")
-    void deveRejeitarStatusGlobalIncoerente() {
+    @DisplayName("Deve aceitar status global incoerente (warn, não throw)")
+    void deveAceitarStatusGlobalIncoerente() {
         var response = new CodeReviewAiResponse(
                 List.of(new CodeReviewAiResponse.AiFileReview("tests/login.spec.ts", FileReviewStatus.APPROVED,
                         List.of(), List.of(), List.of(), List.of(), ReviewConfidence.HIGH, true)),
                 List.of(), List.of(), List.of(), List.of(), List.of(),
                 ReviewStatus.CHANGES_REQUIRED, ReviewConfidence.HIGH, false, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        assertThat(validate(response, "tests/login.spec.ts")).isSameAs(response);
     }
 
     @Test
-    @DisplayName("Deve exigir humanReviewRequired=true quando BLOCKED")
-    void deveExigirHumanReviewQuandoBlocked() {
+    @DisplayName("Deve aceitar BLOCKED sem humanReviewRequired (warn, não throw)")
+    void deveAceitarBlockedSemHumanReview() {
         var issue = new ReviewIssue("HARDCODED_SECRET", ReviewCategory.SECURITY, ReviewSeverity.CRITICAL,
                 "tests/login.spec.ts", null, "segredo", null, "remover", true);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.BLOCKED, ReviewStatus.BLOCKED, false, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        assertThat(validate(response, "tests/login.spec.ts")).isSameAs(response);
     }
 
     @Test

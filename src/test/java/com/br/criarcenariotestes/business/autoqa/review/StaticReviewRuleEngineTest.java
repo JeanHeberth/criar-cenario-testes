@@ -91,6 +91,55 @@ class StaticReviewRuleEngineTest {
     }
 
     @Test
+    @DisplayName("Não deve acusar segredo em seletor nem em leitura de variável de ambiente")
+    void naoDeveAcusarSegredoEmSeletorOuEnv() {
+        // Ambos já bloquearam um teste de login legítimo: HARDCODED_SECRET é
+        // CRITICAL e impede o apply. O mapa de seletores de qualquer tela de
+        // login tem uma chave "password", e ler de env é o que pedimos que o
+        // gerador faça.
+        String[] trechosLegitimos = {
+                "const selectors = { password: 'input[type=\"password\"]' };",
+                "const senha = process.env.TEST_USER_PASSWORD;",
+                "String senha = System.getenv(\"TEST_USER_PASSWORD\");",
+                "password: '#login-password'",
+                "password: '[data-test=\"password\"]'",
+                // Caso negativo precisa de credencial errada de propósito; não é segredo.
+                "{ email: 'usuario_invalido@example.com', senha: 'senha_errada' }",
+                "password: 'senha_incorreta',",
+                "const senhaInvalida = 'wrong_password';",
+                "password: 'changeme'",
+                "senha: ''",
+        };
+        for (String trecho : trechosLegitimos) {
+            String content = GenerationTestData.PLAYWRIGHT_CONTENT + "\n" + trecho + "\n";
+            List<ReviewIssue> issues = reviewOneFile("tests/login.spec.ts", PlanComponentType.TEST, content);
+            assertThat(codesOf(issues))
+                    .as("acusou segredo indevidamente em: %s", trecho)
+                    .doesNotContain(ReviewRule.HARDCODED_SECRET.name());
+        }
+    }
+
+    @Test
+    @DisplayName("Deve continuar detectando segredo literal de verdade")
+    void deveDetectarSegredoLiteralDeVerdade() {
+        String[] segredosReais = {
+                "const senha = 'SuperSecreta123';",
+                "password: 'minhaSenhaForte'",
+                "const apiKey = \"sk-abc123def456\";",
+                // "teste123" fica de fora da lista de falsos justamente por ser a
+                // cara de uma senha fraca hardcoded de verdade.
+                "const senha = 'teste123';",
+        };
+        for (String trecho : segredosReais) {
+            String content = GenerationTestData.PLAYWRIGHT_CONTENT + "\n" + trecho + "\n";
+            List<ReviewIssue> issues = reviewOneFile("tests/login.spec.ts", PlanComponentType.TEST, content);
+            assertThat(codesOf(issues))
+                    .as("deixou passar segredo real em: %s", trecho)
+                    .contains(ReviewRule.HARDCODED_SECRET.name());
+        }
+    }
+
+    @Test
     @DisplayName("Deve detectar segredo hardcoded")
     void deveDetectarSegredo() {
         String content = GenerationTestData.PLAYWRIGHT_CONTENT + "\nconst password = \"SuperSecreta123\";\n";
@@ -221,6 +270,31 @@ class StaticReviewRuleEngineTest {
         String content = "import { test } from '@playwright/test';\ntest('login', async ({ page }) => { await page.goto('/login'); });\n";
         List<ReviewIssue> issues = reviewOneFile("tests/login.spec.ts", PlanComponentType.TEST, content);
         assertThat(codesOf(issues)).contains(ReviewRule.MISSING_ASSERTION.name());
+    }
+
+    @Test
+    @DisplayName("Não deve acusar assertion ausente nos idiomas Java/Selenide/TestNG")
+    void naoDeveAcusarAssertionNosIdiomasJava() {
+        // Cada uma destas formas já reprovou um teste legítimo em produção,
+        // travando o apply com MISSING_ASSERTION (HIGH).
+        String[] idiomas = {
+                "loginPage.areaLogada.shouldBe(visible);",
+                "el.shouldHave(text(\"Bem-vindo\"));",
+                "Assert.assertTrue(page.isLogado());",
+                "assertTrue(page.isLogado());",
+                "assertEquals(esperado, obtido);",
+                "Assertions.assertEquals(a, b);",
+                "assertThat(x).isEqualTo(1);",
+        };
+        for (String idioma : idiomas) {
+            String content = "package com.br.testes;\nimport com.codeborne.selenide.Selenide;\n"
+                    + "public class LoginTest { public void t() { " + idioma + " } }\n";
+            List<ReviewIssue> issues = reviewOneFile("src/test/java/com/br/testes/LoginTest.java",
+                    PlanComponentType.TEST, content);
+            assertThat(codesOf(issues))
+                    .as("idioma de assertion não reconhecido: %s", idioma)
+                    .doesNotContain(ReviewRule.MISSING_ASSERTION.name());
+        }
     }
 
     @Test

@@ -71,6 +71,7 @@ public class GenerationInputSanitizer {
 
         return new SanitizedGenerationInput(
                 discovery.getAutomationFramework(),
+                scenario.automationType(),
                 discovery.getLanguage(),
                 discovery.getBuildTool(),
                 testingFrameworks,

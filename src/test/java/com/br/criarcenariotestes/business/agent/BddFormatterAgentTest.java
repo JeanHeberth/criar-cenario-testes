@@ -6,6 +6,8 @@ import com.br.criarcenariotestes.business.workflow.WorkflowType;
 import com.br.criarcenariotestes.infrastructure.entity.CenarioItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +40,29 @@ class BddFormatterAgentTest {
     @Test
     void deveEstarHabilitadoPorPadrao() {
         assertTrue(agent.isEnabled(context));
+    }
+
+    @Test
+    void deveQuebrarKeywordAposTabelaMarkdown() {
+        // Observado em produção: o modelo escreveu os dados do passo como tabela
+        // markdown e a keyword ficou logo após um "|". Sem o pipe como fronteira,
+        // "Quando" não ganhava quebra de linha, o validador via Quando=false e
+        // reprovava um cenário íntegro — derrubando o workflow inteiro.
+        CenarioItem item = new CenarioItem();
+        item.setNome("Login rejeitado por credencial inválida");
+        item.setScriptTeste("Dado que é enviada uma requisição POST para /auth/login "
+                + "E o corpo contém: | \"email\" | \"senha\" | | a@b.com | errada | Quando a requisição é enviada");
+        item.setResultadoEsperado("Então a resposta deve ter status 401");
+
+        List<CenarioItem> cenarios = new ArrayList<>();
+        cenarios.add(item);
+        context.setCenarios(cenarios);
+
+        agent.executar(context);
+
+        String passos = context.getCenarios().get(0).getScriptTeste();
+        assertTrue(passos.matches("(?s).*(^|\\n)[ \\t]*Quando\\b.*"),
+                "keyword 'Quando' deve iniciar um passo após a tabela. Recebido:\n" + passos);
     }
 
     @Test
@@ -245,15 +270,24 @@ class BddFormatterAgentTest {
 
         // Assert
         CenarioItem resultado = context.getCenarios().get(0);
-        long ocorrencias = countOcorrencias(resultado.getScriptTeste(),
-                "Login rejeitado e mensagem específica de conta inativa exibida ao usuário.");
+        String duplicado = "Login rejeitado e mensagem específica de conta inativa exibida ao usuário.";
 
-        assertEquals(0, ocorrencias,
-                "O texto do Resultado Esperado não deve mais aparecer (duplicado) dentro dos Passos");
-        assertTrue(resultado.getScriptTeste().contains("Então o sistema exibe uma mensagem específica de conta inativa"),
-                "O passo 'Então' original não deve ser removido, só a duplicação");
-        assertEquals("Login rejeitado e mensagem específica de conta inativa exibida ao usuário.",
-                resultado.getResultadoEsperado());
+        // Os Passos não podem conter "Então" — é o contrato do módulo, afirmado
+        // também por deveSepararPassosEResultadosCorretamente. A asserção antiga
+        // exigia o oposto: ela fixava o comportamento de quando a fronteira de
+        // quebra não reconhecia aspas e o "Então" ficava preso nos Passos.
+        assertFalse(resultado.getScriptTeste().contains("Então"),
+                "Passos não devem conter 'Então'. Recebido:\n" + resultado.getScriptTeste());
+        assertTrue(resultado.getScriptTeste().contains("E clica em \"Entrar\""),
+                "O passo anterior ao 'Então' deve ser preservado");
+
+        // A frase duplicada pertence ao Resultado, mas só uma vez.
+        assertEquals(1, countOcorrencias(resultado.getResultadoEsperado(), duplicado),
+                "A frase deve sobrar exatamente uma vez. Recebido:\n" + resultado.getResultadoEsperado());
+        assertTrue(resultado.getResultadoEsperado().startsWith("Então o sistema exibe"),
+                "O Resultado deve começar pelo 'Então' original");
+        assertEquals(0, countOcorrencias(resultado.getScriptTeste(), duplicado),
+                "O texto do Resultado não deve aparecer dentro dos Passos");
     }
 
     @Test
@@ -309,5 +343,33 @@ class BddFormatterAgentTest {
         
         assertNotNull(resultado.getScriptTeste());
         assertNotNull(resultado.getResultadoEsperado());
+    }
+
+    @ParameterizedTest(name = "keyword apos ''{0}''")
+    @ValueSource(strings = {
+            "E o corpo contém {\"email\": \"\", \"senha\": \"\"}",   // aspas/chave de JSON
+            "Dado que os campos estão vazios,",                     // vírgula
+            "Dado email e/ou senha ausentes/",                       // a "/" de "e/ou"
+            "E os campos estão em branco -",                         // hífen
+            "E o corpo contém: | \"email\" | | a@b.com |"            // tabela markdown
+    })
+    void deveQuebrarKeywordAposQualquerCaractere(String prefixo) {
+        // Regressão: a fronteira era uma classe enumerada de caracteres e foi
+        // ampliada duas vezes na marra. Cada um destes prefixos derrubava o
+        // workflow INTEIRO — um cenário com Quando=false reprova o lote todo.
+        CenarioItem item = new CenarioItem();
+        item.setNome("Validação de campos obrigatórios vazios");
+        item.setScriptTeste(prefixo + " Quando a requisição é enviada");
+        item.setResultadoEsperado("Então a resposta deve ter status 400");
+
+        List<CenarioItem> cenarios = new ArrayList<>();
+        cenarios.add(item);
+        context.setCenarios(cenarios);
+
+        agent.executar(context);
+
+        String passos = context.getCenarios().get(0).getScriptTeste();
+        assertTrue(passos.matches("(?s).*(^|\\n)[ \\t]*Quando\\b.*"),
+                "keyword 'Quando' deve iniciar um passo. Recebido:\n" + passos);
     }
 }

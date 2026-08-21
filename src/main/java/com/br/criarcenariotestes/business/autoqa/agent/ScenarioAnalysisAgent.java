@@ -42,14 +42,27 @@ public class ScenarioAnalysisAgent implements AutoQaAgent {
         try {
             ScenarioAnalysisResult result = scenarioAnalysisService.analyze(
                     context.getScenario(),
-                    context.getProjectDiscoveryResult()
+                    context.getProjectDiscoveryResult(),
+                    context.getInformedAutomationType()
             );
             context.registerScenarioAnalysis(result);
+            // As ambiguidades bloqueantes decidem se o planejamento roda ou
+            // não. Sem elas no log, um cenário recusado vira "falhou" sem
+            // dizer o que faltou - e o usuário não tem como corrigir.
+            if (result.status() == com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAnalysisStatus.INVALID) {
+                result.ambiguities().stream()
+                        .filter(com.br.criarcenariotestes.business.autoqa.model.scenario.ScenarioAmbiguity::blocking)
+                        .forEach(a -> log.warn("Ambiguidade BLOQUEANTE. executionId={}, descricao='{}', pergunta='{}'",
+                                context.getExecutionId(), a.description(), a.question()));
+            }
             log.info("Scenario analysis finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success(buildSummary(result));
         } catch (ScenarioAnalysisException exception) {
-            log.warn("Scenario analysis failed. executionId={}, failureType={}",
-                    context.getExecutionId(), exception.getClass().getSimpleName());
+            // O tipo da exceção sozinho não diz QUAL regra reprovou, e a
+            // resposta da IA muda a cada geração: sem a mensagem, reproduzir
+            // para diagnosticar custa outra rodada de chamadas.
+            log.warn("Scenario analysis failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Scenario analysis finished. executionId={}, status=FAILED", context.getExecutionId());
             return AgentExecutionResult.failure("Falha na análise do cenário");
         }

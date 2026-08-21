@@ -49,8 +49,8 @@ public class ProjectKnowledgeAgent implements AutoQaAgent {
             log.info("Project knowledge finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success(buildSummary(result));
         } catch (ProjectKnowledgeException | IllegalArgumentException exception) {
-            log.warn("Project knowledge failed. executionId={}, failureType={}",
-                    context.getExecutionId(), exception.getClass().getSimpleName());
+            log.warn("Project knowledge failed. executionId={}, failureType={}, failureMessage='{}'",
+                    context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Project knowledge finished. executionId={}, status=FAILED", context.getExecutionId());
             return AgentExecutionResult.failure("Falha na coleta de conhecimento do projeto");
         }

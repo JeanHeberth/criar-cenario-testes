@@ -41,13 +41,13 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
         com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService scenarioService = Mockito.mock(com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService.class);
         ProjectKnowledgeService knowledgeService = Mockito.mock(ProjectKnowledgeService.class);
         when(discoveryService.discover(Path.of("/tmp/project"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
         when(knowledgeService.collect(discovery(), analysis())).thenReturn(knowledge());
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
 
         verify(discoveryService).discover(Path.of("/tmp/project"));
-        verify(scenarioService).analyze("Cenário", discovery());
+        verify(scenarioService).analyze("Cenário", discovery(), null);
         verify(knowledgeService).collect(discovery(), analysis());
     }
 
@@ -59,7 +59,7 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
         com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService scenarioService = Mockito.mock(com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService.class);
         ProjectKnowledgeService knowledgeService = Mockito.mock(ProjectKnowledgeService.class);
         when(discoveryService.discover(Path.of("/tmp/project"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
         when(knowledgeService.collect(discovery(), analysis())).thenReturn(knowledge());
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
@@ -75,7 +75,7 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
         com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService scenarioService = Mockito.mock(com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService.class);
         ProjectKnowledgeService knowledgeService = Mockito.mock(ProjectKnowledgeService.class);
         when(discoveryService.discover(Path.of("/tmp/project"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
         when(knowledgeService.collect(discovery(), analysis())).thenReturn(knowledge());
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
@@ -94,7 +94,7 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
 
-        verify(scenarioService, never()).analyze(any(), any());
+        verify(scenarioService, never()).analyze(any(), any(), any());
         verify(knowledgeService, never()).collect(any(), any());
     }
 
@@ -106,7 +106,7 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
         com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService scenarioService = Mockito.mock(com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService.class);
         ProjectKnowledgeService knowledgeService = Mockito.mock(ProjectKnowledgeService.class);
         when(discoveryService.discover(Path.of("/tmp/project"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenThrow(new com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisTechnicalException("falha"));
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenThrow(new com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisTechnicalException("falha"));
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
 
@@ -121,7 +121,7 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
         com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService scenarioService = Mockito.mock(com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService.class);
         ProjectKnowledgeService knowledgeService = Mockito.mock(ProjectKnowledgeService.class);
         when(discoveryService.discover(Path.of("/tmp/project"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
         when(knowledgeService.collect(discovery(), analysis())).thenThrow(new ProjectKnowledgeValidationException("falha"));
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
@@ -137,7 +137,7 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
         com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService scenarioService = Mockito.mock(com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService.class);
         ProjectKnowledgeService knowledgeService = Mockito.mock(ProjectKnowledgeService.class);
         when(discoveryService.discover(Path.of("/tmp/project"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
         when(knowledgeService.collect(discovery(), analysis())).thenReturn(knowledge());
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
@@ -155,7 +155,7 @@ class AutoQaWorkflowProjectKnowledgeIntegrationTest {
         com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService scenarioService = Mockito.mock(com.br.criarcenariotestes.business.autoqa.scenario.ScenarioAnalysisService.class);
         ProjectKnowledgeService knowledgeService = Mockito.mock(ProjectKnowledgeService.class);
         when(discoveryService.discover(Path.of("/tmp/project"))).thenReturn(discovery());
-        when(scenarioService.analyze("Cenário", discovery())).thenReturn(analysis());
+        when(scenarioService.analyze("Cenário", discovery(), null)).thenReturn(analysis());
         when(knowledgeService.collect(discovery(), analysis())).thenReturn(knowledge());
 
         new AutoQaWorkflowService(orderedAgents(discoveryService, scenarioService, knowledgeService)).execute(context);
