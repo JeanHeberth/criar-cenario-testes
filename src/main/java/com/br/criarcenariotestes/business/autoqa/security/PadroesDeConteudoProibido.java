@@ -25,10 +25,23 @@ public final class PadroesDeConteudoProibido {
      * Código-fonte. ";" só conta fechando linha — em prosa é pontuação comum
      * ("o usuário adiciona; o sistema valida"), e barrá-lo reprovava análises
      * corretas.
+     *
+     * <p>Chaves ({@code {} }) saíram pelo mesmo motivo, um nível acima: não são
+     * sinal de código, são sinal de JSON. Um cenário de teste de API descreve o
+     * corpo da requisição e da resposta — {@code testData[].example} de um POST
+     * é literalmente <code>{"email": "...", "senha": "..."}</code>. Com a chave
+     * na regra, era impossível analisar qualquer contrato REST: a análise
+     * inteira era descartada e o workflow travava no primeiro estágio.
+     *
+     * <p>Nada de real se perde. Código de verdade traz keyword, "=>" ou ";"
+     * fechando linha; o que sobrava só com chave era justamente o caso ambíguo
+     * — literal de objeto e payload JSON são indistinguíveis. E estes padrões
+     * guardam CAMPOS DE DESCRIÇÃO (ScenarioAnalysisValidator, PlanningValidator),
+     * não os arquivos gerados, que têm validação própria na geração e no review.
      */
     public static final Pattern CODIGO = Pattern.compile(
             "(?i)\\b(class|import|public|private|protected|return|function|def|let|const|var|new)\\b"
-                    + "|[{}]|=>|;\\s*$",
+                    + "|=>|;\\s*$",
             Pattern.MULTILINE);
 
     /**

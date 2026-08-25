@@ -54,14 +54,14 @@ class GenerationServiceTest {
         manifestWriter = Mockito.spy(new GenerationManifestWriter(new ObjectMapper()));
 
         service = new GenerationService(aiProviderResolver, inputSanitizer, promptFactory, responseParser, validator,
-                fileWriter, hashService, manifestWriter);
+                fileWriter, hashService, manifestWriter, new IdiomasDoFramework());
         service.setGeneratedBaseDir(tempDir);
 
         primaryProvider = mockProvider("primary");
         fallbackProvider = mockProvider("fallback");
         when(aiProviderResolver.getActiveProvider()).thenReturn(primaryProvider);
         when(aiProviderResolver.getFallbackProvider()).thenReturn(fallbackProvider);
-        when(inputSanitizer.sanitize(any(), any(), any(), any())).thenReturn(mock(SanitizedGenerationInput.class));
+        when(inputSanitizer.sanitize(any(), any(), any(), any(), any(), any(), any())).thenReturn(mock(SanitizedGenerationInput.class));
         when(promptFactory.createSystemPrompt()).thenReturn("system");
         when(promptFactory.createUserPrompt(any())).thenReturn("user");
     }
@@ -70,7 +70,7 @@ class GenerationServiceTest {
     @DisplayName("Deve gerar com provider ativo em caso de sucesso")
     void deveGerarComProviderAtivo() {
         var aiResult = rawResultOneFile();
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -78,16 +78,16 @@ class GenerationServiceTest {
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), onePlan());
 
         assertThat(result).isNotNull();
-        verify(primaryProvider).gerarResposta(any(), any());
-        verify(fallbackProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider).gerarResposta(any(), any(), any());
+        verify(fallbackProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
     @DisplayName("Deve usar fallback quando provider ativo falha tecnicamente")
     void deveUsarFallbackEmFalhaTecnica() {
         var aiResult = rawResultOneFile();
-        when(primaryProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha primário"));
-        when(fallbackProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha primário"));
+        when(fallbackProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -95,13 +95,13 @@ class GenerationServiceTest {
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), onePlan());
 
         assertThat(result).isNotNull();
-        verify(fallbackProvider).gerarResposta(any(), any());
+        verify(fallbackProvider).gerarResposta(any(), any(), any());
     }
 
     @Test
     @DisplayName("Não deve usar fallback em falha semântica (ValidationException)")
     void deveNaoUsarFallbackEmFalhaSemantica() {
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(rawResultOneFile());
         when(validator.validate(any(), any(), any(), any(), any())).thenThrow(new GenerationValidationException("inválido"));
 
@@ -109,14 +109,14 @@ class GenerationServiceTest {
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), onePlan()))
                 .isInstanceOf(GenerationValidationException.class);
 
-        verify(fallbackProvider, never()).gerarResposta(any(), any());
+        verify(fallbackProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
     @DisplayName("Deve falhar quando os dois providers falharem tecnicamente")
     void deveFalharQuandoDoisProvidersFalharem() {
-        when(primaryProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha 1"));
-        when(fallbackProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha 2"));
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha 1"));
+        when(fallbackProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha 2"));
 
         assertThatThrownBy(() -> service.generate(UUID.randomUUID(), GenerationTestData.playwrightDiscovery(),
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), onePlan()))
@@ -128,13 +128,13 @@ class GenerationServiceTest {
     void deveNaoRepetirProviderIgual() {
         when(aiProviderResolver.getActiveProvider()).thenReturn(primaryProvider);
         when(aiProviderResolver.getFallbackProvider()).thenReturn(primaryProvider);
-        when(primaryProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha"));
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha"));
 
         assertThatThrownBy(() -> service.generate(UUID.randomUUID(), GenerationTestData.playwrightDiscovery(),
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), onePlan()))
                 .isInstanceOf(GenerationTechnicalException.class);
 
-        verify(primaryProvider, times(1)).gerarResposta(any(), any());
+        verify(primaryProvider, times(1)).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -189,7 +189,7 @@ class GenerationServiceTest {
                 GenerationTestData.invalidScenario(), GenerationTestData.completeKnowledge(), onePlan()))
                 .isInstanceOf(GenerationValidationException.class);
 
-        verify(primaryProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -199,7 +199,7 @@ class GenerationServiceTest {
                 GenerationTestData.validScenario(), GenerationTestData.failedKnowledge(), onePlan()))
                 .isInstanceOf(GenerationValidationException.class);
 
-        verify(primaryProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -209,7 +209,7 @@ class GenerationServiceTest {
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), GenerationTestData.blockedPlan()))
                 .isInstanceOf(GenerationValidationException.class);
 
-        verify(primaryProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -219,7 +219,7 @@ class GenerationServiceTest {
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), GenerationTestData.invalidPlan()))
                 .isInstanceOf(GenerationValidationException.class);
 
-        verify(primaryProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -229,13 +229,13 @@ class GenerationServiceTest {
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), onePlan()))
                 .isInstanceOf(GenerationValidationException.class);
 
-        verify(primaryProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
     @DisplayName("Deve validar antes de escrever (nenhuma escrita se validator falhar)")
     void deveValidarAntesDeEscrever() {
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(rawResultOneFile());
         when(validator.validate(any(), any(), any(), any(), any())).thenThrow(new GenerationValidationException("inválido"));
 
@@ -251,7 +251,7 @@ class GenerationServiceTest {
     @DisplayName("Não deve criar diretório de execução em falha semântica")
     void deveNaoEscreverEmFalhaSemantica() {
         UUID executionId = UUID.randomUUID();
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(rawResultOneFile());
         when(validator.validate(any(), any(), any(), any(), any())).thenThrow(new GenerationValidationException("inválido"));
 
@@ -267,7 +267,7 @@ class GenerationServiceTest {
     void deveEscreverArquivosAposValidacao() {
         UUID executionId = UUID.randomUUID();
         var aiResult = rawResultOneFile();
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -284,7 +284,7 @@ class GenerationServiceTest {
     void deveCalcularHashes() {
         UUID executionId = UUID.randomUUID();
         var aiResult = rawResultOneFile();
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -301,7 +301,7 @@ class GenerationServiceTest {
     void deveEscreverManifest() {
         UUID executionId = UUID.randomUUID();
         var aiResult = rawResultOneFile();
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -323,7 +323,7 @@ class GenerationServiceTest {
                 GenerationTestData.PLAYWRIGHT_CONTENT, null, false);
         var aiResult = GenerationTestData.aiResult(GenerationStatus.COMPLETED, GenerationConfidence.HIGH, true, file1, file2);
 
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -352,8 +352,8 @@ class GenerationServiceTest {
     void deveEnviarSomenteInputSanitizado() {
         var aiResult = rawResultOneFile();
         SanitizedGenerationInput sanitized = mock(SanitizedGenerationInput.class);
-        when(inputSanitizer.sanitize(any(), any(), any(), any())).thenReturn(sanitized);
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(inputSanitizer.sanitize(any(), any(), any(), any(), any(), any(), any())).thenReturn(sanitized);
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -367,7 +367,7 @@ class GenerationServiceTest {
     @DisplayName("Deve ser stateless entre execuções (executionIds independentes)")
     void deveSerStateless() {
         var aiResult = rawResultOneFile();
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
@@ -387,15 +387,15 @@ class GenerationServiceTest {
     @DisplayName("Deve chamar cada provider no máximo uma vez")
     void deveChamarCadaProviderNoMaximoUmaVez() {
         var aiResult = rawResultOneFile();
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 
         service.generate(UUID.randomUUID(), GenerationTestData.playwrightDiscovery(),
                 GenerationTestData.validScenario(), GenerationTestData.completeKnowledge(), onePlan());
 
-        verify(primaryProvider, times(1)).gerarResposta(any(), any());
-        verify(fallbackProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider, times(1)).gerarResposta(any(), any(), any());
+        verify(fallbackProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -405,7 +405,7 @@ class GenerationServiceTest {
                 GenerationTestData.reuseAction("pages/LoginPage.ts", PlanComponentType.PAGE_OBJECT)
         );
         var aiResult = GenerationTestData.aiResult(GenerationStatus.COMPLETED, GenerationConfidence.HIGH, true);
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(aiResult);
         when(validator.validate(any(), any(), any(), any(), any())).thenReturn(aiResult);
 

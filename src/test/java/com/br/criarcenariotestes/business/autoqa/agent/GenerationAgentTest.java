@@ -56,7 +56,7 @@ class GenerationAgentTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
         AgentExecutionResult result = agent.execute(context);
         assertThat(result.success()).isFalse();
-        verify(generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -101,7 +101,7 @@ class GenerationAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -116,7 +116,7 @@ class GenerationAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -127,7 +127,7 @@ class GenerationAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -138,7 +138,7 @@ class GenerationAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -153,20 +153,24 @@ class GenerationAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     @DisplayName("Deve chamar GenerationService quando pré-condições OK")
     void deveChamarGenerationService() {
         AutoQaContext context = contextoCompleto();
-        when(generationService.generate(any(), any(), any(), any(), any())).thenReturn(sampleResult());
+        when(generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
 
         agent.execute(context);
 
+        // As correções da tentativa anterior fazem parte da chamada: é por elas
+        // que a regeração conserta em vez de repetir o mesmo defeito.
         verify(generationService).generate(
                 context.getExecutionId(), context.getProjectDiscoveryResult(), context.getScenarioAnalysisResult(),
-                context.getProjectKnowledgeResult(), context.getTechnicalPlanResult()
+                context.getProjectKnowledgeResult(), context.getTechnicalPlanResult(),
+                context.getCorrecoesSolicitadas(), context.getArquivosParaRegerar(),
+                context.getGeracaoAnterior(), context.getScenario()
         );
     }
 
@@ -175,7 +179,7 @@ class GenerationAgentTest {
     void deveRegistrarGenerationResult() {
         AutoQaContext context = contextoCompleto();
         GenerationResult generationResult = sampleResult();
-        when(generationService.generate(any(), any(), any(), any(), any())).thenReturn(generationResult);
+        when(generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(generationResult);
 
         agent.execute(context);
 
@@ -186,7 +190,7 @@ class GenerationAgentTest {
     @DisplayName("Deve retornar resumo técnico com status e contagens")
     void deveRetornarResumoTecnico() {
         AutoQaContext context = contextoCompleto();
-        when(generationService.generate(any(), any(), any(), any(), any())).thenReturn(sampleResult());
+        when(generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
 
         AgentExecutionResult result = agent.execute(context);
 
@@ -199,20 +203,21 @@ class GenerationAgentTest {
     @DisplayName("Deve retornar falha quando service lançar GenerationTechnicalException")
     void deveRetornarFalhaQuandoServiceFalhar() {
         AutoQaContext context = contextoCompleto();
-        when(generationService.generate(any(), any(), any(), any(), any()))
+        when(generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new GenerationTechnicalException("falha técnica"));
 
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        assertThat(result.message()).isEqualTo("Falha na geração de automação");
+        assertThat(result.message()).startsWith("Falha na geração de automação:")
+                .as("a mensagem precisa carregar o motivo: sem ele o diagnóstico só existe no console do IntelliJ");
     }
 
     @Test
     @DisplayName("Deve retornar falha quando service lançar GenerationValidationException")
     void deveRetornarFalhaQuandoValidationException() {
         AutoQaContext context = contextoCompleto();
-        when(generationService.generate(any(), any(), any(), any(), any()))
+        when(generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new GenerationValidationException("inválido"));
 
         AgentExecutionResult result = agent.execute(context);
@@ -224,7 +229,7 @@ class GenerationAgentTest {
     @DisplayName("Não deve registrar resultado em caso de falha")
     void deveNaoRegistrarResultadoEmFalha() {
         AutoQaContext context = contextoCompleto();
-        when(generationService.generate(any(), any(), any(), any(), any()))
+        when(generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new GenerationTechnicalException("falha técnica"));
 
         agent.execute(context);
@@ -245,7 +250,7 @@ class GenerationAgentTest {
     @DisplayName("Não deve expor código gerado na mensagem de sucesso")
     void deveNaoExporCodigoNaMensagem() {
         AutoQaContext context = contextoCompleto();
-        when(generationService.generate(any(), any(), any(), any(), any())).thenReturn(sampleResult());
+        when(generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
 
         AgentExecutionResult result = agent.execute(context);
 

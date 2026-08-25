@@ -163,7 +163,8 @@ class ApplyAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        assertThat(result.message()).isEqualTo("Falha na aplicação de arquivos no projeto");
+        assertThat(result.message()).startsWith("Falha na aplicação de arquivos no projeto:")
+                .as("a mensagem precisa carregar o motivo: sem ele o diagnóstico só existe no console do IntelliJ");
     }
 
     @Test

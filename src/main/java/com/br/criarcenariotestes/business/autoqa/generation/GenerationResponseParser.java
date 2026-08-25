@@ -38,7 +38,7 @@ public class GenerationResponseParser {
             throw new GenerationParseException("Resposta acima do limite permitido");
         }
 
-        String json = removeKnownWrappers(normalized);
+        String json = corrigirEscapesInvalidos(removeKnownWrappers(normalized));
         try {
             return objectMapper.readValue(json, GenerationResult.class);
         } catch (JsonProcessingException exception) {
@@ -47,6 +47,31 @@ public class GenerationResponseParser {
                     json.length() > 500 ? json.substring(0, 500) + "..." : json);
             throw new GenerationParseException("JSON inválido", exception);
         }
+    }
+
+    /**
+     * Corrige {@code \'} — escape que NÃO existe em JSON.
+     *
+     * <p>Observado em produção: o modelo gera código TypeScript dentro de uma
+     * string JSON e escapa a aspa simples de {@code '@playwright/test'} por
+     * hábito de outras linguagens. O Jackson recusa com "Unrecognized character
+     * escape" e a geração inteira é perdida — depois de a chamada já ter sido
+     * paga.
+     *
+     * <p>A troca é segura justamente porque {@code \'} é inválido: não existe
+     * JSON legítimo em que essa sequência signifique outra coisa. Aspa simples
+     * não precisa de escape em JSON, então o resultado é o caractere que o
+     * modelo queria.
+     *
+     * <p>Só esta sequência é tocada. Escapes válidos ({@code \n}, {@code \"},
+     * {@code \\}) passam intactos — sanear demais corromperia conteúdo bom.
+     */
+    private String corrigirEscapesInvalidos(String json) {
+        if (json.indexOf("\\'") < 0) {
+            return json;
+        }
+        log.warn("Resposta continha escape inválido (\\') — corrigido antes do parse.");
+        return json.replace("\\'", "'");
     }
 
     private String removeKnownWrappers(String response) {

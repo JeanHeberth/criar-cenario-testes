@@ -28,7 +28,28 @@ public record SanitizedGenerationInput(
         String planStrategy,
         List<SanitizedFileAction> fileActions,
         List<SanitizedComponent> reusableComponents,
-        List<String> planWarnings
+        List<String> planWarnings,
+        /**
+         * Erros da tentativa ANTERIOR que esta geração precisa corrigir. Vazio
+         * na primeira tentativa. É o que transforma o pipeline de detector em
+         * corretor: sem realimentar o erro, a retentativa repete o mesmo
+         * defeito e só queima token.
+         */
+        List<String> correcoesObrigatorias,
+        /**
+         * Caminho de import do cliente, derivado do plano COMPLETO. Precisa vir
+         * de fora porque numa regeração parcial o plano recebido está restrito
+         * ao arquivo com erro — e o cliente, que compila bem, não está nele.
+         */
+        String moduloDoCliente,
+        /**
+         * Nomes de campo que o CONTRATO define, extraídos do texto original do
+         * cenário. Existem porque o modelo tem viés forte para a convenção em
+         * inglês: gerou "statusCode"/"message"/"error" repetidamente para uma
+         * API que responde "status"/"erro"/"mensagem". Instrução em prosa não
+         * segurou; a lista concreta dá o vocabulário fechado.
+         */
+        List<String> camposDoContrato
 ) {
     public record SanitizedStep(int order, String action, String expectedResult) {}
 

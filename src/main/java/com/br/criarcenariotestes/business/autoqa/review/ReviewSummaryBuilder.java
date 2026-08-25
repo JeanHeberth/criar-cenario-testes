@@ -63,4 +63,60 @@ public class ReviewSummaryBuilder {
     private boolean hasSeverity(List<ReviewIssue> issues, ReviewSeverity severity) {
         return issues.stream().anyMatch(i -> i != null && i.severity() == severity);
     }
+
+    /**
+     * Ordem de permissividade, do mais frouxo ao mais rígido. INVALID fica de
+     * fora porque é tratado antes, como resposta inutilizável.
+     */
+    private static final List<ReviewStatus> RIGIDEZ_GLOBAL = List.of(
+            ReviewStatus.APPROVED,
+            ReviewStatus.APPROVED_WITH_WARNINGS,
+            ReviewStatus.CHANGES_REQUIRED,
+            ReviewStatus.BLOCKED);
+
+    private static final List<FileReviewStatus> RIGIDEZ_ARQUIVO = List.of(
+            FileReviewStatus.APPROVED,
+            FileReviewStatus.APPROVED_WITH_WARNINGS,
+            FileReviewStatus.CHANGES_REQUIRED,
+            FileReviewStatus.BLOCKED);
+
+    /**
+     * O status final nunca é MAIS PERMISSIVO que o veredito declarado pela IA.
+     *
+     * <p>Observado em produção: a IA revisora respondeu CHANGES_REQUIRED, mas
+     * classificou seus achados como MEDIUM/LOW. Como o status era recalculado
+     * só pelas severidades, o veredito virava APPROVED_WITH_WARNINGS e o
+     * pipeline seguia — a revisora pediu para parar e o sistema entendeu
+     * "siga". Código que sequer compilava passou por aí.
+     *
+     * <p>Entre dois sinais discordantes, o mais restritivo é o que preserva a
+     * intenção: severidade mal classificada é falha de calibragem do modelo,
+     * não permissão para aplicar. O caminho inverso continua valendo — se as
+     * regras estáticas acham HIGH e a IA disse APPROVED, prevalece o derivado.
+     */
+    public ReviewStatus naoMaisPermissivoQue(ReviewStatus derivado, ReviewStatus declaradoPelaIa) {
+        // List.of(...).indexOf(null) lança NPE. O null é real: arquivo sem
+        // correspondente na resposta da IA.
+        if (declaradoPelaIa == null) {
+            return derivado;
+        }
+        int posDerivado = RIGIDEZ_GLOBAL.indexOf(derivado);
+        int posDeclarado = RIGIDEZ_GLOBAL.indexOf(declaradoPelaIa);
+        if (posDerivado < 0 || posDeclarado < 0) {
+            return derivado;
+        }
+        return posDeclarado > posDerivado ? declaradoPelaIa : derivado;
+    }
+
+    public FileReviewStatus naoMaisPermissivoQue(FileReviewStatus derivado, FileReviewStatus declaradoPelaIa) {
+        if (declaradoPelaIa == null) {
+            return derivado;
+        }
+        int posDerivado = RIGIDEZ_ARQUIVO.indexOf(derivado);
+        int posDeclarado = RIGIDEZ_ARQUIVO.indexOf(declaradoPelaIa);
+        if (posDerivado < 0 || posDeclarado < 0) {
+            return derivado;
+        }
+        return posDeclarado > posDerivado ? declaradoPelaIa : derivado;
+    }
 }

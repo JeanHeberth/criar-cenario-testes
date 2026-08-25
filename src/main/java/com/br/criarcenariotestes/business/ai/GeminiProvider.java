@@ -49,7 +49,7 @@ public class GeminiProvider implements AiProvider {
     private String gerarRespostaComHistorico(String systemPrompt, List<Map<String, String>> history, Integer maxTokensOverride) {
         validarConfiguracao();
 
-        int maxOutputTokens = maxTokensOverride != null ? maxTokensOverride : properties.getMaxOutputTokens();
+        int maxOutputTokens = maxTokensOverride != null ? maxTokensOverride : properties.getMaxTokens();
 
         String urlFinal = properties.getUrl()
                 + "/"

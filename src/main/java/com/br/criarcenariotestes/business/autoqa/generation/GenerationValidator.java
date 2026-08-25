@@ -132,6 +132,7 @@ public class GenerationValidator {
         Set<String> seenPaths = new LinkedHashSet<>();
         long totalContentLength = 0;
         boolean algumArquivoComEvidencia = false;
+        java.util.Map<String, Boolean> arquivosCorrigidos = new java.util.LinkedHashMap<>();
 
         for (int i = 0; i < result.files().size(); i++) {
             GeneratedFile file = result.files().get(i);
@@ -160,9 +161,15 @@ public class GenerationValidator {
                 throw new GenerationValidationException("Operação divergente do plano para " + path);
             }
 
+            // existingFile é DERIVÁVEL da operação, que a linha acima acabou de
+            // conferir contra o plano — não há julgamento aqui. Reprovar a
+            // geração inteira por esse metadado descartava a chamada já paga
+            // por um campo que o sistema calcula sozinho.
             boolean expectedExistingFile = planned.operation() == FileOperation.UPDATE;
             if (file.existingFile() != expectedExistingFile) {
-                throw new GenerationValidationException("existingFile incoerente com a operação para " + path);
+                log.warn("existingFile divergente da operação — corrigido. arquivo='{}', operacao={}, recebido={}",
+                        path, planned.operation(), file.existingFile());
+                arquivosCorrigidos.put(path, expectedExistingFile);
             }
 
             String content = file.content();
@@ -236,7 +243,18 @@ public class GenerationValidator {
 
         validateStatusCoherence(result, uncovered.isEmpty());
 
-        return result;
+        if (arquivosCorrigidos.isEmpty()) {
+            return result;
+        }
+        java.util.List<GeneratedFile> corrigidos = result.files().stream()
+                .map(f -> !arquivosCorrigidos.containsKey(f.relativePath()) ? f
+                        : new GeneratedFile(f.relativePath(), f.operation(), f.componentType(), f.content(),
+                                f.encoding(), f.sha256(), f.status(), arquivosCorrigidos.get(f.relativePath()),
+                                f.reusedComponents(), f.dependencies(), f.warnings()))
+                .toList();
+        return new GenerationResult(result.executionId(), result.framework(), result.language(), corrigidos,
+                result.reusedFiles(), result.warnings(), result.generatedRoot(), result.manifestRelativePath(),
+                result.status(), result.confidence(), result.valid());
     }
 
     private void validateExtension(String path, FrameworkRule rule) {

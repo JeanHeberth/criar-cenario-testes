@@ -262,6 +262,48 @@ public class AutoQaContext {
         this.technicalPlanResult = result;
     }
 
+    /**
+     * Libera geração e revisão para uma NOVA tentativa do laço de regeração.
+     *
+     * <p>O guard de registro único existe para pegar dupla gravação acidental,
+     * e continua valendo. A retentativa é o caso oposto: deliberada. Sem este
+     * método explícito, o laço morria com "Generation already registered" logo
+     * na segunda volta — o laço disparava e não conseguia concluir.
+     *
+     * <p>Só estes dois campos são limpos. Discovery, análise, conhecimento e
+     * plano permanecem: são a base sobre a qual a nova geração acontece, e
+     * refazê-los custaria chamadas de IA sem necessidade.
+     */
+    public void prepararNovaTentativaDeGeracao() {
+        // A geração anterior é preservada: na regeração parcial só os arquivos
+        // com erro voltam da IA, e os demais vêm daqui. Sem isso a aderência ao
+        // plano acusaria "arquivo planejado não foi gerado".
+        this.geracaoAnterior = this.generationResult;
+        this.generationResult = null;
+        this.codeReviewResult = null;
+    }
+
+    private GenerationResult geracaoAnterior;
+
+    public GenerationResult getGeracaoAnterior() {
+        return geracaoAnterior;
+    }
+
+    /**
+     * Arquivos que a próxima geração deve refazer. Vazio = gerar tudo.
+     * Pedir só o que quebrou economiza token e reduz a chance de a resposta
+     * ser truncada pelo limite de saída — que foi o que derrubou o Gemini.
+     */
+    private java.util.List<String> arquivosParaRegerar = java.util.List.of();
+
+    public java.util.List<String> getArquivosParaRegerar() {
+        return arquivosParaRegerar;
+    }
+
+    public void setArquivosParaRegerar(java.util.List<String> arquivos) {
+        this.arquivosParaRegerar = arquivos == null ? java.util.List.of() : java.util.List.copyOf(arquivos);
+    }
+
     public void registerGeneration(GenerationResult result) {
         if (result == null) throw new NullPointerException("result must not be null");
         if (this.projectDiscoveryResult == null) throw new IllegalStateException("Project discovery must be registered before generation");
@@ -380,5 +422,19 @@ public class AutoQaContext {
         if (this.learningResult != null) throw new IllegalStateException("Learning already registered");
         this.learningResult = result;
     }
-}
 
+    /**
+     * Erros que a tentativa de geração anterior precisa corrigir nesta rodada.
+     * Vazio na primeira. Preenchido pelo orquestrador a partir dos achados da
+     * revisão — é o que fecha o ciclo detectar → corrigir.
+     */
+    private java.util.List<String> correcoesSolicitadas = java.util.List.of();
+
+    public java.util.List<String> getCorrecoesSolicitadas() {
+        return correcoesSolicitadas;
+    }
+
+    public void setCorrecoesSolicitadas(java.util.List<String> correcoes) {
+        this.correcoesSolicitadas = correcoes == null ? java.util.List.of() : java.util.List.copyOf(correcoes);
+    }
+}

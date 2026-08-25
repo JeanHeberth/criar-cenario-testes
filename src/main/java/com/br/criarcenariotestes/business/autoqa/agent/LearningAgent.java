@@ -79,14 +79,15 @@ public class LearningAgent implements AutoQaAgent {
                     context.getExecutionId(), ex.getClass().getSimpleName(), ex.getMessage());
             log.info("Learning agent finished. executionId={}, status=BLOCKED", context.getExecutionId());
             context.addError("Falha ao coletar aprendizado da execução");
-            return AgentExecutionResult.failure("Falha ao coletar aprendizado da execução");
+            return AgentExecutionResult.failure("Falha ao coletar aprendizado da execução: "
+                    + ex.getClass().getSimpleName() + " - " + ex.getMessage());
         }
     }
 
     private AgentExecutionResult failureSkip(AutoQaContext context, String reason) {
         log.warn("Learning agent skipped. executionId={}, reason={}", context.getExecutionId(), reason);
         log.info("Learning agent finished. executionId={}, status=BLOCKED", context.getExecutionId());
-        return AgentExecutionResult.failure("Falha ao coletar aprendizado da execução");
+        return AgentExecutionResult.failure("Falha ao coletar aprendizado da execução: " + reason);
     }
 
     private AgentExecutionResult buildAgentResult(LearningResult result) {

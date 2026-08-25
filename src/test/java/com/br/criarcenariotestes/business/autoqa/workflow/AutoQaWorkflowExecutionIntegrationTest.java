@@ -137,7 +137,7 @@ class AutoQaWorkflowExecutionIntegrationTest {
 
         runFase1a6(context, mocks);
 
-        verify(mocks.generationService).generate(any(), any(), any(), any(), any());
+        verify(mocks.generationService).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -149,7 +149,7 @@ class AutoQaWorkflowExecutionIntegrationTest {
 
         runFase1a6(context, mocks);
 
-        verify(mocks.reviewService).review(any(), any(), any(), any(), any(), any());
+        verify(mocks.reviewService).review(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -394,8 +394,8 @@ class AutoQaWorkflowExecutionIntegrationTest {
         when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(readyPlan());
-        when(mocks.generationService.generate(any(), any(), any(), any(), any())).thenReturn(generationResult());
-        when(mocks.reviewService.review(any(), any(), any(), any(), any(), any())).thenReturn(reviewResult());
+        when(mocks.generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(generationResult());
+        when(mocks.reviewService.review(any(), any(), any(), any(), any(), any(), any())).thenReturn(reviewResult());
     }
 
     private void stubApplyCompleted(Mocks mocks) {

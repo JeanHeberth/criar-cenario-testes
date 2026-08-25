@@ -97,7 +97,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
 
-        verify(mocks.generationService).generate(any(), any(), any(), any(), any());
+        verify(mocks.generationService).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -122,7 +122,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
 
-        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
         assertThat(context.getStatus()).isEqualTo(AutoQaStatus.ERROR);
     }
 
@@ -137,7 +137,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
 
-        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -152,7 +152,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
 
-        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -168,7 +168,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
 
-        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any());
+        verify(mocks.generationService, never()).generate(any(), any(), any(), any(), any(), any(), any(), any(), any());
         assertThat(context.getStatus()).isEqualTo(AutoQaStatus.ERROR);
     }
 
@@ -181,7 +181,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
         when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(readyPlan());
-        when(mocks.generationService.generate(any(), any(), any(), any(), any()))
+        when(mocks.generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new GenerationTechnicalException("falha técnica"));
 
         new AutoQaWorkflowService(orderedAgents(mocks)).execute(context);
@@ -277,7 +277,7 @@ class AutoQaWorkflowGenerationIntegrationTest {
         when(mocks.scenarioService.analyze(any(), any(), any())).thenReturn(analysis());
         when(mocks.knowledgeService.collect(any(), any())).thenReturn(knowledge());
         when(mocks.planningService.plan(any(), any(), any())).thenReturn(readyPlan());
-        when(mocks.generationService.generate(any(), any(), any(), any(), any())).thenReturn(generationResult());
+        when(mocks.generationService.generate(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(generationResult());
     }
 
     private List<AutoQaAgent> orderedAgents(Mocks mocks) {

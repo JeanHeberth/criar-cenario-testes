@@ -25,6 +25,10 @@ public class ScenarioAnalysisPromptFactory {
                   (ou escrever trechos novos) faz a resposta inteira ser
                   descartada pelo validador
                 - classificar dados sensíveis como SECRET
+                - em testData com "type": "SECRET", o campo "example" DEVE ser
+                  null — nem valor real, nem fictício, nem placeholder. Exemplo
+                  de senha continua sendo exemplo de senha, e a análise inteira
+                  é reprovada por isso. Descreva o dado em "description".
                 - registrar ambiguidades de forma explícita
                 - ambiguidades BLOQUEANTES (blocking=true): informação sem a qual
                   é impossível criar qualquer teste útil — por exemplo, não há
