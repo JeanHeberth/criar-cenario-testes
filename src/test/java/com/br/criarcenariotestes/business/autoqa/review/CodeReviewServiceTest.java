@@ -59,8 +59,10 @@ class CodeReviewServiceTest {
         validator = mock(CodeReviewValidator.class);
         summaryBuilder = new ReviewSummaryBuilder();
 
+        // Verificador real: sem compilador no projeto de teste ele se declara
+        // indisponível e não interfere nas asserções destes casos.
         service = new CodeReviewService(aiProviderResolver, artifactReader, ruleEngine, inputSanitizer,
-                promptFactory, responseParser, validator, summaryBuilder);
+                promptFactory, responseParser, validator, summaryBuilder, new CompilacaoTypeScript());
 
         primaryProvider = mockProvider("primary");
         fallbackProvider = mockProvider("fallback");

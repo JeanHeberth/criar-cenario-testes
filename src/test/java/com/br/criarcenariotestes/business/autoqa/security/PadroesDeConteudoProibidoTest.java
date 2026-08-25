@@ -62,4 +62,30 @@ class PadroesDeConteudoProibidoTest {
                     .isTrue();
         }
     }
+
+    @Test
+    void naoDeveAcusarPayloadJsonComoCodigo() {
+        // Regressão: a chave estava na regra de código, então descrever o corpo
+        // de uma requisição REST derrubava a análise inteira do cenário no
+        // primeiro estágio ("Código indevido detectado"). Teste de API sem JSON
+        // no exemplo não existe.
+        assertThat(PadroesDeConteudoProibido.CODIGO.matcher(
+                "{\"email\": \"usuario@teste.com\", \"senha\": \"...\"}").find())
+                .as("payload JSON não é código")
+                .isFalse();
+        assertThat(PadroesDeConteudoProibido.CODIGO.matcher(
+                "a resposta deve conter { \"status\": 400, \"erro\": \"Erro de Validação\" }").find())
+                .as("contrato de resposta descrito em prosa não é código")
+                .isFalse();
+    }
+
+    @Test
+    void deveContinuarAcusandoCodigoDeVerdade() {
+        // O que sustenta a regra depois da saída da chave: keyword, "=>" e ";"
+        // fechando linha.
+        assertThat(PadroesDeConteudoProibido.CODIGO.matcher("const token = resposta.token;").find()).isTrue();
+        assertThat(PadroesDeConteudoProibido.CODIGO.matcher("public class LoginTest").find()).isTrue();
+        assertThat(PadroesDeConteudoProibido.CODIGO.matcher("import { test } from '@playwright/test'").find()).isTrue();
+        assertThat(PadroesDeConteudoProibido.CODIGO.matcher("() => expect(res).toBeOk()").find()).isTrue();
+    }
 }

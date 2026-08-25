@@ -1,5 +1,7 @@
 package com.br.criarcenariotestes.business.autoqa.generation;
 
+import java.util.List;
+import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationFramework;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
 import org.springframework.stereotype.Component;
 
@@ -93,6 +95,16 @@ public class GenerationPromptFactory {
                   se o projeto já usa AUTH_USERNAME, não invente AUTH_EMAIL. Nome
                   divergente falha em execução, não na geração — e o erro aponta para o
                   lugar errado.
+                - CUIDADO com o shorthand de objeto quando o nome da VARIÁVEL difere
+                  do nome do CAMPO. Se o campo do contrato é "email" e a variável veio
+                  de AUTH_USERNAME, "{ usuario, senha }" envia a chave "usuario" e o
+                  servidor responde 400. Escreva "{ email: usuario, senha }". O nome da
+                  variável é detalhe local; o nome do campo é contrato.
+                - NÃO asserte campo que o contrato não define. Se a resposta 200 traz
+                  "token", "tipo" e "usuario", não invente "path" nem "message" — campo
+                  inventado produz teste plausível que não testa nada e falha só na
+                  execução. Na dúvida entre dois nomes, use o que está escrito no
+                  cenário, literalmente.
                 - Separar Arrange / Act / Assert com linha em branco, para a leitura
                   distinguir ação de verificação.
 
@@ -126,7 +138,22 @@ public class GenerationPromptFactory {
     }
 
     public String createUserPrompt(SanitizedGenerationInput input) {
+        StringBuilder correcoes = new StringBuilder();
+        if (input.correcoesObrigatorias() != null && !input.correcoesObrigatorias().isEmpty()) {
+            // Vai no TOPO e em tom imperativo: é o motivo de esta chamada
+            // existir. A tentativa anterior foi reprovada exatamente nisto.
+            correcoes.append("CORRIJA OBRIGATORIAMENTE — a tentativa anterior foi REPROVADA nestes pontos.\n")
+                    .append("Cada item abaixo é um erro real verificado, não sugestão de estilo:\n");
+            for (String correcao : input.correcoesObrigatorias()) {
+                correcoes.append("  - ").append(correcao).append('\n');
+            }
+            correcoes.append("Gere o arquivo inteiro corrigido. Não repita o mesmo erro.\n\n");
+        }
+
         StringBuilder sb = new StringBuilder();
+        sb.append(correcoes);
+        sb.append(camposDoContrato(input));
+        sb.append(esqueletoDoCanal(input));
         sb.append("Framework de automação: ").append(input.framework()).append("\n");
         if (input.automationType() != null && input.automationType() != AutomationType.UNKNOWN) {
             sb.append("Canal do teste: ").append(input.automationType()).append("\n");
@@ -187,5 +214,110 @@ public class GenerationPromptFactory {
 
         sb.append("\nResponda somente com JSON puro, sem Markdown.");
         return sb.toString();
+    }
+
+    /**
+     * Cabeçalho canônico do arquivo, para o modelo PREENCHER em vez de
+     * inventar.
+     *
+     * <p>Imports e setup não dependem do cenário — dependem de framework e
+     * canal, que o sistema já conhece. Deixá-los a cargo do modelo é oferecer
+     * superfície de erro em troca de nada: em cinco gerações seguidas ele
+     * inventou {@code playwright} como export, criou contexto à mão e trocou
+     * {@code data} por {@code body}.
+     *
+     * <p>Isto é o par de prompt da correção determinística em
+     * IdiomasDoFramework: aqui se pede a forma certa, lá se garante. Depois de
+     * quatro rodadas em que instrução sozinha não bastou, as duas camadas
+     * existem de propósito.
+     */
+    private String esqueletoDoCanal(SanitizedGenerationInput input) {
+        if (input.framework() != AutomationFramework.PLAYWRIGHT
+                || input.automationType() != AutomationType.API) {
+            return "";
+        }
+        // Sem o caminho REAL do cliente, o esqueleto é omitido por inteiro.
+        // Duas execuções foram perdidas porque ele oferecia um caminho de
+        // exemplo e o modelo o copiava literalmente: o esqueleto, feito para
+        // eliminar erro, passou a ser a única fonte de erro. Melhor não guiar
+        // do que guiar para um arquivo inexistente.
+        String moduloDoCliente = input.moduloDoCliente();
+        if (moduloDoCliente == null || moduloDoCliente.isBlank()) {
+            return "";
+        }
+
+        return ("""
+                ESQUELETO OBRIGATÓRIO do arquivo de teste. Use EXATAMENTE este
+                cabeçalho e preencha apenas os corpos dos testes:
+
+                import { test, expect } from '@playwright/test';
+                import { ApiClient } from '%s';
+
+                test.describe('<descrição>', () => {
+                  let client: ApiClient;""".formatted(moduloDoCliente) + """
+
+
+                  // `request` é o fixture: já é um APIRequestContext e herda o
+                  // baseURL da config. NÃO importe `playwright` (não é export
+                  // do pacote) nem crie contexto com newContext.
+                  test.beforeEach(({ request }) => {
+                    client = new ApiClient(request);
+                  });
+
+                  // testes aqui
+                });
+
+                No CLIENTE, o corpo da requisição vai em `data`, nunca em `body`:
+                  return this.request.post('rota/relativa', { data: credenciais });
+                `body` não é opção do APIRequestContext e não compila.
+
+                O cliente devolve SEMPRE Promise<APIResponse> — nunca um tipo
+                união de corpos parseados:
+                  async login(dados: Credenciais): Promise<APIResponse>
+                Devolver `Promise<Sucesso | Erro>` obriga o teste a estreitar a
+                união em cada acesso, e um único método mal tipado produz dezenas
+                de erros no spec. O parse e a tipagem ficam no TESTE:
+                  const corpo = await resposta.json() as RespostaDeErro;
+
+                Para afirmar AUSÊNCIA de campo use not.toHaveProperty:
+                  expect(corpo).not.toHaveProperty('token');
+                Acessar `corpo.token` num tipo que não declara `token` não compila.
+
+                O nome da classe do cliente é seu; o CAMINHO do import acima é o
+                arquivo real do plano e não pode ser alterado.
+
+                """);
+    }
+
+
+    /**
+     * Vocabulário FECHADO de nomes de campo, extraído do texto original do
+     * cenário.
+     *
+     * <p>O modelo tem viés forte para a convenção de API em inglês: gerou
+     * {@code statusCode}/{@code message}/{@code error} em rodadas seguidas para
+     * uma API que responde {@code status}/{@code erro}/{@code mensagem}. Dizer
+     * "use os nomes exatos" em prosa não segurou nenhuma vez — a lista concreta
+     * dá o conjunto e nomeia o erro provável.
+     *
+     * <p>Deriva do cenário, então generaliza: para um contrato em inglês, a
+     * lista sai em inglês.
+     */
+    private String camposDoContrato(SanitizedGenerationInput input) {
+        List<String> campos = input.camposDoContrato();
+        if (campos == null || campos.isEmpty()) {
+            return "";
+        }
+        return """
+                CAMPOS DO CONTRATO — são os ÚNICOS nomes que existem nesta API:
+                  %s
+
+                NÃO traduza nem "normalize" para a convenção que você conhece de
+                outras APIs. Se o contrato diz "erro", o campo é "erro" — não
+                "error". Se diz "mensagem", não é "message". Se diz "status", não
+                é "statusCode". Campo fora desta lista não existe na resposta e o
+                teste falha em execução.
+
+                """.formatted(String.join(", ", campos));
     }
 }

@@ -76,7 +76,11 @@ public class GenerationAgent implements AutoQaAgent {
                     context.getProjectDiscoveryResult(),
                     context.getScenarioAnalysisResult(),
                     context.getProjectKnowledgeResult(),
-                    context.getTechnicalPlanResult()
+                    context.getTechnicalPlanResult(),
+                    context.getCorrecoesSolicitadas(),
+                    context.getArquivosParaRegerar(),
+                    context.getGeracaoAnterior(),
+                    context.getScenario()
             );
             context.registerGeneration(result);
             log.info("Generation agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
@@ -88,14 +92,15 @@ public class GenerationAgent implements AutoQaAgent {
             log.warn("Generation agent failed. executionId={}, failureType={}, failureMessage='{}'",
                     context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Generation agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha na geração de automação");
+            return AgentExecutionResult.failure("Falha na geração de automação: "
+                    + exception.getClass().getSimpleName() + " - " + exception.getMessage());
         }
     }
 
     private AgentExecutionResult failureSkip(AutoQaContext context, String reason) {
         log.warn("Generation agent skipped. executionId={}, reason={}", context.getExecutionId(), reason);
         log.info("Generation agent finished. executionId={}, status=FAILED", context.getExecutionId());
-        return AgentExecutionResult.failure("Falha na geração de automação");
+        return AgentExecutionResult.failure("Falha na geração de automação: " + reason);
     }
 
     private String buildSummary(GenerationResult result) {

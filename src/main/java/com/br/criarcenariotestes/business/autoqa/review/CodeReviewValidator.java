@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -62,6 +63,7 @@ public class CodeReviewValidator {
             }
         }
 
+        List<CodeReviewAiResponse.AiFileReview> arquivosSaneados = new ArrayList<>();
         for (int i = 0; i < response.files().size(); i++) {
             CodeReviewAiResponse.AiFileReview fileReview = response.files().get(i);
             if (fileReview == null) throw new CodeReviewValidationException("files[" + i + "] nulo");
@@ -72,39 +74,95 @@ public class CodeReviewValidator {
             }
             if (fileReview.status() == null) throw new CodeReviewValidationException("files[" + i + "].status ausente");
 
-            validateIssues(fileReview.issues(), path);
+            List<ReviewIssue> issuesSaneados = sanearIssues(fileReview.issues(), path);
             validateSuggestions(fileReview.suggestions());
-            validateFileStatusCoherence(fileReview);
+            arquivosSaneados.add(new CodeReviewAiResponse.AiFileReview(
+                    fileReview.relativePath(), fileReview.status(), issuesSaneados,
+                    fileReview.suggestions(), fileReview.passedRules(), fileReview.skippedRules(),
+                    fileReview.confidence(), fileReview.valid()));
         }
 
-        validateIssues(response.globalIssues(), null);
+        List<ReviewIssue> globaisSaneados = sanearIssues(response.globalIssues(), null);
         validateSuggestions(response.suggestions());
-        validateNoInconsistentDuplicates(response.globalIssues());
-        validateGlobalStatusCoherence(response);
+        validateNoInconsistentDuplicates(globaisSaneados);
 
-        return response;
+        // Sem nada a sanear, devolve a instância recebida: reconstruir por
+        // reconstruir esconderia, na leitura, que a resposta passou intacta.
+        boolean saneouAlgo = !globaisSaneados.equals(response.globalIssues())
+                || !arquivosSaneados.equals(response.files());
+        CodeReviewAiResponse resultado = saneouAlgo
+                ? new CodeReviewAiResponse(arquivosSaneados, globaisSaneados, response.suggestions(),
+                        response.passedRules(), response.skippedRules(), response.warnings(),
+                        response.status(), response.confidence(), response.humanReviewRequired(), response.valid())
+                : response;
+        if (saneouAlgo) {
+            log.warn("Resposta da revisão saneada: achados malformados foram descartados ou normalizados.");
+        }
+
+        // As checagens de coerência rodam sobre o que SOBROU. Rodá-las na
+        // resposta crua faria um achado já descartado (nulo, por exemplo)
+        // estourar aqui — trocando um tudo-ou-nada por outro.
+        resultado.files().forEach(this::validateFileStatusCoherence);
+        validateGlobalStatusCoherence(resultado);
+
+        return resultado;
     }
 
-    private void validateIssues(List<ReviewIssue> issues, String expectedPath) {
+    /**
+     * Saneia os achados em vez de derrubar a revisão inteira.
+     *
+     * <p>Observado em produção: a revisora devolveu um achado EMPTY_METHOD com
+     * {@code line} inválida e o validador lançou exceção, descartando junto
+     * quatro erros de compilação legítimos e acionáveis. Um número de linha
+     * ruim num achado não invalida os outros.
+     *
+     * <p>Três tratamentos, por natureza do defeito:
+     * <ul>
+     *   <li>METADADO ruim (line &lt;= 0): normaliza para nulo e mantém o achado
+     *       — a linha é acessório, o defeito apontado pode ser real;</li>
+     *   <li>ESTRUTURA inutilizável (sem code/category/severity, path divergente):
+     *       descarta AQUELE achado;</li>
+     *   <li>SEGURANÇA (caminho ou texto perigoso): continua derrubando. Não é
+     *       calibragem ruim do modelo, é conteúdo que não pode passar adiante.</li>
+     * </ul>
+     */
+    private List<ReviewIssue> sanearIssues(List<ReviewIssue> issues, String expectedPath) {
+        List<ReviewIssue> saneados = new ArrayList<>();
         for (int i = 0; i < issues.size(); i++) {
             ReviewIssue issue = issues.get(i);
-            if (issue == null) throw new CodeReviewValidationException("issue nula na posição " + i);
-            if (issue.code() == null || issue.code().isBlank()) throw new CodeReviewValidationException("issue sem code");
-            if (issue.category() == null) throw new CodeReviewValidationException("issue sem category: " + issue.code());
-            if (issue.severity() == null) throw new CodeReviewValidationException("issue sem severity: " + issue.code());
-            if (issue.line() != null && issue.line() <= 0) {
-                throw new CodeReviewValidationException("line deve ser positiva: " + issue.code());
+            if (issue == null) {
+                log.warn("Achado descartado: nulo na posição {}", i);
+                continue;
+            }
+            if (issue.code() == null || issue.code().isBlank()
+                    || issue.category() == null || issue.severity() == null) {
+                log.warn("Achado descartado por estrutura incompleta. code='{}', category={}, severity={}",
+                        issue.code(), issue.category(), issue.severity());
+                continue;
             }
             if (issue.relativePath() != null) {
                 rejectDangerousPath(issue.relativePath());
                 if (expectedPath != null && !expectedPath.equals(issue.relativePath())) {
-                    throw new CodeReviewValidationException("issue.relativePath diverge do arquivo revisado: " + issue.relativePath());
+                    log.warn("Achado descartado: relativePath '{}' diverge do arquivo revisado '{}'",
+                            issue.relativePath(), expectedPath);
+                    continue;
                 }
             }
             rejectDangerousText(issue.evidence(), "evidence");
             rejectDangerousText(issue.message(), "message");
             rejectDangerousText(issue.recommendation(), "recommendation");
+
+            if (issue.line() != null && issue.line() <= 0) {
+                log.warn("Achado com line inválida ({}) normalizada para nula. code='{}'",
+                        issue.line(), issue.code());
+                saneados.add(new ReviewIssue(issue.code(), issue.category(), issue.severity(),
+                        issue.relativePath(), null, issue.message(), issue.evidence(),
+                        issue.recommendation(), issue.blocking()));
+                continue;
+            }
+            saneados.add(issue);
         }
+        return List.copyOf(saneados);
     }
 
     private void validateSuggestions(List<ReviewSuggestion> suggestions) {

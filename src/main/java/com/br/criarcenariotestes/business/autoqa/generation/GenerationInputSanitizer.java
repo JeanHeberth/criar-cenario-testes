@@ -28,6 +28,36 @@ public class GenerationInputSanitizer {
                                               ScenarioAnalysisResult scenario,
                                               ProjectKnowledgeResult knowledge,
                                               TechnicalPlanResult plan) {
+        return sanitize(discovery, scenario, knowledge, plan, List.of());
+    }
+
+    /**
+     * @param correcoes erros da tentativa anterior a serem corrigidos nesta.
+     */
+    public SanitizedGenerationInput sanitize(ProjectDiscoveryResult discovery,
+                                              ScenarioAnalysisResult scenario,
+                                              ProjectKnowledgeResult knowledge,
+                                              TechnicalPlanResult plan,
+                                              List<String> correcoes) {
+        return sanitize(discovery, scenario, knowledge, plan, correcoes, null);
+    }
+
+    public SanitizedGenerationInput sanitize(ProjectDiscoveryResult discovery,
+                                              ScenarioAnalysisResult scenario,
+                                              ProjectKnowledgeResult knowledge,
+                                              TechnicalPlanResult plan,
+                                              List<String> correcoes,
+                                              String moduloDoCliente) {
+        return sanitize(discovery, scenario, knowledge, plan, correcoes, moduloDoCliente, List.of());
+    }
+
+    public SanitizedGenerationInput sanitize(ProjectDiscoveryResult discovery,
+                                              ScenarioAnalysisResult scenario,
+                                              ProjectKnowledgeResult knowledge,
+                                              TechnicalPlanResult plan,
+                                              List<String> correcoes,
+                                              String moduloDoCliente,
+                                              List<String> camposDoContrato) {
         Objects.requireNonNull(discovery, "discovery must not be null");
         Objects.requireNonNull(scenario, "scenario must not be null");
         Objects.requireNonNull(knowledge, "knowledge must not be null");
@@ -83,7 +113,10 @@ public class GenerationInputSanitizer {
                 plan.strategy(),
                 fileActions,
                 reusableComponents,
-                planWarnings
+                planWarnings,
+                correcoes == null ? List.of() : List.copyOf(correcoes),
+                moduloDoCliente,
+                camposDoContrato == null ? List.of() : List.copyOf(camposDoContrato)
         );
     }
 

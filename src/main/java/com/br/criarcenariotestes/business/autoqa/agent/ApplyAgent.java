@@ -111,7 +111,8 @@ public class ApplyAgent implements AutoQaAgent {
             log.warn("Apply agent failed. executionId={}, failureType={}, failureMessage='{}'",
                     context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Apply agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha na aplicação de arquivos no projeto");
+            return AgentExecutionResult.failure("Falha na aplicação de arquivos no projeto: "
+                    + exception.getClass().getSimpleName() + " - " + exception.getMessage());
         }
     }
 

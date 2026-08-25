@@ -68,7 +68,8 @@ public class ReviewAgent implements AutoQaAgent {
                     context.getScenarioAnalysisResult(),
                     context.getProjectKnowledgeResult(),
                     context.getTechnicalPlanResult(),
-                    context.getGenerationResult()
+                    context.getGenerationResult(),
+                    context.getScenario()
             );
             context.registerCodeReview(result);
             // Com CHANGES_REQUIRED o apply é bloqueado. Sem os achados no log,
@@ -84,14 +85,19 @@ public class ReviewAgent implements AutoQaAgent {
             log.warn("Review agent failed. executionId={}, failureType={}, failureMessage='{}'",
                     context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Review agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha na revisão de código gerado");
+            // O tipo e a mensagem dizem QUAL revisão quebrou (leitura de
+            // artefato, parse da resposta da IA, validação). Sem eles a API
+            // devolve um texto genérico e só o console do IntelliJ sabe o
+            // motivo — quem usa o front não tem esse console.
+            return AgentExecutionResult.failure("Falha na revisão de código gerado: "
+                    + exception.getClass().getSimpleName() + " - " + exception.getMessage());
         }
     }
 
     private AgentExecutionResult failureSkip(AutoQaContext context, String reason) {
         log.warn("Review agent skipped. executionId={}, reason={}", context.getExecutionId(), reason);
         log.info("Review agent finished. executionId={}, status=FAILED", context.getExecutionId());
-        return AgentExecutionResult.failure("Falha na revisão de código gerado");
+        return AgentExecutionResult.failure("Revisão não executada: " + reason);
     }
 
     private String buildSummary(CodeReviewResult result) {

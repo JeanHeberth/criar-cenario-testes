@@ -246,4 +246,21 @@ public final class PlanningTestData {
         int dot = file.lastIndexOf('.');
         return dot > 0 ? file.substring(0, dot) : file;
     }
+
+    /** Discovery apontando para uma raiz específica, para exercitar caminhos relativos a ela. */
+    public static ProjectDiscoveryResult discoveryEm(String raiz) {
+        ProjectDiscoveryResult base = discovery();
+        return new ProjectDiscoveryResult(Path.of(raiz), base.automationFramework(), base.language(),
+            base.packageManager(), base.buildTool(), base.testingFrameworks(), base.detectedFrameworks(),
+            base.libraries(), base.configurationFile(), base.evidenceFiles(), base.warnings(),
+            base.confidence(), base.valid());
+    }
+
+    public static TechnicalPlanResult planoComCaminhos(String... caminhos) {
+        TechnicalPlanResult base = readyPlan();
+        return new TechnicalPlanResult(base.title(), base.strategy(),
+            java.util.Arrays.stream(caminhos).map(PlanningTestData::createAction).toList(),
+            base.components(), base.reuseDecisions(), base.risks(), base.warnings(), base.assumptions(),
+            base.constraints(), base.requiredApprovals(), base.status(), base.confidence(), base.valid());
+    }
 }

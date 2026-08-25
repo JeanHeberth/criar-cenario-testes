@@ -1,5 +1,10 @@
 package com.br.criarcenariotestes.business.autoqa.executionapi.orchestrator;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.br.criarcenariotestes.business.autoqa.model.review.ReviewIssue;
+import com.br.criarcenariotestes.business.autoqa.model.review.ReviewRule;
+import com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus;
 import com.br.criarcenariotestes.business.autoqa.context.AutoQaContext;
 import com.br.criarcenariotestes.business.autoqa.model.discovery.AutomationFramework;
 import com.br.criarcenariotestes.business.autoqa.model.scenario.AutomationType;
@@ -37,6 +42,7 @@ import java.util.function.Consumer;
 @Service
 public class AutoQaExecutionOrchestrator {
 
+    private static final Logger log = LoggerFactory.getLogger(AutoQaExecutionOrchestrator.class);
     private static final int TOTAL_STAGES = AutoQaStage.values().length;
 
     private final AutoQaExecutionRepository executionRepository;
@@ -235,6 +241,9 @@ public class AutoQaExecutionOrchestrator {
         AutoQaStageExecutor.AutoQaStageExecutionResult result;
         try {
             result = stageExecutor.executeStages(context, block);
+            if (ehBlocoDeGeracao(block)) {
+                result = regerarAteRevisaoAprovar(context, block, result);
+            }
         } catch (RuntimeException ex) {
             return finalizeFailure(document, null, null, "TECHNICAL_FAILURE", exceptionMessage(ex));
         }
@@ -369,5 +378,167 @@ public class AutoQaExecutionOrchestrator {
 
     private Instant toInstant(java.time.LocalDateTime localDateTime) {
         return localDateTime.atZone(ZoneId.systemDefault()).toInstant();
+    }
+
+    private boolean ehBlocoDeGeracao(List<AutoQaStage> block) {
+        return block.contains(AutoQaStage.GENERATION) && block.contains(AutoQaStage.REVIEW);
+    }
+
+    /**
+     * Regera enquanto a revisão reprovar por erro ACIONÁVEL, até o limite de
+     * maxGenerationRetries.
+     *
+     * <p>Antes disto o pipeline era só detector: reprovava e parava, e o
+     * maxGenerationRetries existia sem nunca ser usado. Detectar sem
+     * realimentar não conserta nada — a pessoa teria de corrigir à mão o que a
+     * própria ferramenta deveria produzir.
+     *
+     * <p>Três travas contra desperdício de token, porque cada volta é uma
+     * chamada paga:
+     * <ol>
+     *   <li>só reprovação ACIONÁVEL entra — erro de compilação e campo fora do
+     *       contrato. Achado de estilo não justifica regerar;</li>
+     *   <li>se os erros da volta forem IGUAIS aos da anterior, para na hora: o
+     *       modelo não está convergindo e insistir é queimar token;</li>
+     *   <li>teto rígido em maxGenerationRetries.</li>
+     * </ol>
+     */
+    private AutoQaStageExecutor.AutoQaStageExecutionResult regerarAteRevisaoAprovar(
+            AutoQaContext context,
+            List<AutoQaStage> block,
+            AutoQaStageExecutor.AutoQaStageExecutionResult resultado) {
+
+        List<String> anteriores = List.of();
+        int tentativa = 0;
+
+        while (resultado.success() && tentativa < properties.getMaxGenerationRetries()) {
+            List<String> acionaveis = errosAcionaveis(context);
+            if (acionaveis.isEmpty()) {
+                return resultado;
+            }
+            if (acionaveis.equals(anteriores)) {
+                log.warn("Regeração interrompida: mesmos erros da tentativa anterior, sem convergência. "
+                        + "executionId={}, erros={}", context.getExecutionId(), acionaveis.size());
+                return resultado;
+            }
+
+            tentativa++;
+            log.info("Revisão reprovou por erro acionável — regerando. executionId={}, tentativa={}/{}, erros={}",
+                    context.getExecutionId(), tentativa, properties.getMaxGenerationRetries(), acionaveis);
+
+            anteriores = acionaveis;
+            context.setCorrecoesSolicitadas(acionaveis);
+            context.setArquivosParaRegerar(arquivosComErro(context));
+            context.prepararNovaTentativaDeGeracao();
+            resultado = stageExecutor.executeStages(context, block);
+        }
+
+        context.setCorrecoesSolicitadas(List.of());
+        return resultado;
+    }
+
+    /**
+     * Caminhos dos arquivos que têm erro acionável. Só eles voltam para a IA:
+     * regerar os três arquivos inteiros a cada volta gasta token à toa e
+     * aproxima a resposta do limite de saída — foi assim que o Gemini truncou.
+     */
+    private List<String> arquivosComErro(AutoQaContext context) {
+        var revisao = context.getCodeReviewResult();
+        if (revisao == null) {
+            return List.of();
+        }
+        List<String> comErro = revisao.files().stream()
+                .filter(arquivo -> arquivo.issues().stream()
+                        .anyMatch(issue -> ReviewRule.COMPILATION_ERROR.name().equals(issue.code())
+                                || ReviewRule.CONTRACT_FIELD_UNKNOWN.name().equals(issue.code())))
+                .map(arquivo -> arquivo.relativePath())
+                .distinct()
+                .toList();
+
+        return incluirOrigemDosTipos(context, revisao, comErro);
+    }
+
+    /**
+     * Acrescenta os arquivos que DEFINEM os tipos citados nos erros.
+     *
+     * <p>Observado em produção, e caro: o cliente foi gerado devolvendo
+     * {@code Promise<Sucesso | Erro>}, e todo acesso a campo no spec passou a
+     * exigir estreitamento da união. Os erros apareciam no SPEC, então só ele
+     * era regerado — enquanto a causa, o tipo de retorno, seguia intacta no
+     * cliente. Três voltas depois os erros tinham subido de 1 para 24.
+     *
+     * <p>Erro de tipo aparece onde o tipo é USADO, não onde é DEFINIDO.
+     * Regerar apenas o ponto de uso é insolúvel por construção.
+     */
+    private List<String> incluirOrigemDosTipos(AutoQaContext context,
+                                                com.br.criarcenariotestes.business.autoqa.model.review.CodeReviewResult revisao,
+                                                List<String> comErro) {
+        List<String> mensagens = revisao.files().stream()
+                .flatMap(arquivo -> arquivo.issues().stream())
+                .filter(issue -> ReviewRule.COMPILATION_ERROR.name().equals(issue.code()))
+                .map(ReviewIssue::message)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (mensagens.isEmpty()) {
+            return comErro;
+        }
+
+        // Os tipos citados vêm entre aspas simples na mensagem do tsc:
+        // "Property 'x' does not exist on type 'Sucesso | Erro'".
+        java.util.Set<String> tiposCitados = new java.util.LinkedHashSet<>();
+        var citacao = java.util.regex.Pattern.compile("'([A-Za-z_][A-Za-z0-9_]*)'");
+        for (String mensagem : mensagens) {
+            var matcher = citacao.matcher(mensagem);
+            while (matcher.find()) {
+                tiposCitados.add(matcher.group(1));
+            }
+        }
+
+        var geracao = context.getGenerationResult();
+        if (geracao == null || tiposCitados.isEmpty()) {
+            return comErro;
+        }
+
+        List<String> comOrigem = new java.util.ArrayList<>(comErro);
+        for (var arquivo : geracao.files()) {
+            if (arquivo == null || arquivo.content() == null || comOrigem.contains(arquivo.relativePath())) {
+                continue;
+            }
+            boolean defineTipoCitado = tiposCitados.stream()
+                    .anyMatch(tipo -> arquivo.content().contains("interface " + tipo)
+                            || arquivo.content().contains("type " + tipo)
+                            || arquivo.content().contains("class " + tipo));
+            if (defineTipoCitado) {
+                log.info("Arquivo incluído na regeração por DEFINIR tipo citado no erro. arquivo={}",
+                        arquivo.relativePath());
+                comOrigem.add(arquivo.relativePath());
+            }
+        }
+        return List.copyOf(comOrigem);
+    }
+
+    /**
+     * Achados que descrevem um defeito OBJETIVO do código e que o gerador tem
+     * como corrigir relendo o próprio arquivo.
+     */
+    private List<String> errosAcionaveis(AutoQaContext context) {
+        var revisao = context.getCodeReviewResult();
+        if (revisao == null) {
+            return List.of();
+        }
+        if (revisao.status() != ReviewStatus.CHANGES_REQUIRED && revisao.status() != ReviewStatus.BLOCKED) {
+            return List.of();
+        }
+
+        return java.util.stream.Stream.concat(
+                        revisao.files().stream().flatMap(arquivo -> arquivo.issues().stream()),
+                        revisao.globalIssues().stream())
+                .filter(issue -> ReviewRule.COMPILATION_ERROR.name().equals(issue.code())
+                        || ReviewRule.CONTRACT_FIELD_UNKNOWN.name().equals(issue.code()))
+                .map(ReviewIssue::message)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
     }
 }

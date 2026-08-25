@@ -52,3 +52,6 @@ out/
 # São subprodutos de execução, nunca fonte — e podem conter trechos de código do
 # projeto alvo.
 .auto-qa/
+
+# Log de aplicação — gerado em runtime
+logs/

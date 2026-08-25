@@ -32,13 +32,16 @@ ai:
     api-key: ${OPENAI_API_KEY}
     model: gpt-4.1
     url: https://api.openai.com/v1/chat/completions
-    max-tokens: 4000
+    # Teto de SAÍDA, não meta: só é cobrado o que o modelo realmente gera.
+    # Com 4000 as respostas grandes truncavam no meio do JSON e a chamada era
+    # perdida inteira — pagar por uma resposta cortada é o pior custo possível.
+    max-tokens: 8000
 
   gemini:
     api-key: ${GEMINI_API_KEY}
     model: gemini-2.5-flash
     url: https://generativelanguage.googleapis.com/v1beta/models
-    max-tokens: 4000
+    max-tokens: 8000
     disable-thinking: ${GEMINI_DISABLE_THINKING:true}
 
   claude:
@@ -85,6 +88,16 @@ zephyr:
       robot: Robot
 
 logging:
+  # O console da IDE some para quem investiga fora dela (agente, CI, outra
+  # máquina). Com arquivo, o MESMO conteúdo fica acompanhável em tempo real
+  # via tail — a falta disso fez cada diagnóstico de falha do pipeline
+  # depender de alguém copiar o console do IntelliJ à mão.
+  file:
+    name: logs/criar-cenario-testes.log
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 5
   level:
     root: INFO
     br.com: DEBUG
