@@ -594,4 +594,35 @@ class PlanningValidatorTest {
             null, PlanningConfidence.HIGH, true
         );
     }
+
+    @Test
+    void deveNormalizarCaminhoPrefixadoComNomeDaRaizDoProjeto() {
+        // Regressão do caso real: com o projeto vazio, o plano saiu com
+        // "testando-AUTO-QA/api/auth/authApiClient.ts". Aplicar isso criaria o
+        // projeto aninhado dentro de si mesmo.
+        var plano = PlanningTestData.planoComCaminhos(
+                "testando-AUTO-QA/api/auth/authApiClient.ts",
+                "testando-AUTO-QA/api/auth/authentication.test.ts");
+
+        var normalizado = validator.validate(plano, PlanningTestData.discoveryEm("/tmp/testando-AUTO-QA"),
+                PlanningTestData.validScenario(), PlanningTestData.completeKnowledge());
+
+        assertThat(normalizado.fileActions())
+                .extracting(PlannedFileAction::relativePath)
+                .containsExactly("api/auth/authApiClient.ts", "api/auth/authentication.test.ts");
+    }
+
+    @Test
+    void naoDeveMexerEmCaminhoQueApenasComecaComTextoParecido() {
+        // "testando-AUTO-QA-extra/" não é a raiz: o prefixo só vale como
+        // SEGMENTO completo, senão a normalização mutilaria caminhos legítimos.
+        var plano = PlanningTestData.planoComCaminhos("testando-AUTO-QA-extra/x.ts");
+
+        var normalizado = validator.validate(plano, PlanningTestData.discoveryEm("/tmp/testando-AUTO-QA"),
+                PlanningTestData.validScenario(), PlanningTestData.completeKnowledge());
+
+        assertThat(normalizado.fileActions())
+                .extracting(PlannedFileAction::relativePath)
+                .containsExactly("testando-AUTO-QA-extra/x.ts");
+    }
 }

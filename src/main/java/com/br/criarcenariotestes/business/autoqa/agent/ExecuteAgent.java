@@ -103,14 +103,15 @@ public class ExecuteAgent implements AutoQaAgent {
             log.warn("Execute agent failed. executionId={}, failureType={}, failureMessage='{}'",
                     context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Execute agent finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha na execução dos testes do projeto");
+            return AgentExecutionResult.failure("Falha na execução dos testes do projeto: "
+                    + exception.getClass().getSimpleName() + " - " + exception.getMessage());
         }
     }
 
     private AgentExecutionResult failureSkip(AutoQaContext context, String reason) {
         log.warn("Execute agent skipped. executionId={}, reason={}", context.getExecutionId(), reason);
         log.info("Execute agent finished. executionId={}, status=FAILED", context.getExecutionId());
-        return AgentExecutionResult.failure("Falha na execução dos testes do projeto");
+        return AgentExecutionResult.failure("Falha na execução dos testes do projeto: " + reason);
     }
 
     private AgentExecutionResult buildAgentResult(ExecutionResult result) {

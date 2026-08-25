@@ -64,7 +64,11 @@ public class ScenarioAnalysisAgent implements AutoQaAgent {
             log.warn("Scenario analysis failed. executionId={}, failureType={}, failureMessage='{}'",
                     context.getExecutionId(), exception.getClass().getSimpleName(), exception.getMessage());
             log.info("Scenario analysis finished. executionId={}, status=FAILED", context.getExecutionId());
-            return AgentExecutionResult.failure("Falha na análise do cenário");
+            // A mensagem da exceção diz QUAL regra reprovou (ex.: "steps[3].order
+            // duplicado", "automationType ausente"). Devolver só o texto genérico
+            // obrigava a ir ler o console do IntelliJ para descobrir o motivo —
+            // e quem usa a API ou o front não tem esse console.
+            return AgentExecutionResult.failure("Falha na análise do cenário: " + exception.getMessage());
         }
     }
 

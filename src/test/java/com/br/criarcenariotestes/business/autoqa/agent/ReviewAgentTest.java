@@ -63,7 +63,7 @@ class ReviewAgentTest {
         AutoQaContext context = AutoQaContext.create("Cenário", "/projeto");
         AgentExecutionResult result = agent.execute(context);
         assertThat(result.success()).isFalse();
-        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any());
+        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -98,7 +98,7 @@ class ReviewAgentTest {
     void deveExigirGeneration() {
         AutoQaContext context = contextoComPlano(onePlan());
         assertThat(agent.execute(context).success()).isFalse();
-        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any());
+        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -110,7 +110,7 @@ class ReviewAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any());
+        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -122,20 +122,24 @@ class ReviewAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any());
+        verify(codeReviewService, never()).review(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     @DisplayName("Deve chamar CodeReviewService quando pré-condições OK")
     void deveChamarCodeReviewService() {
         AutoQaContext context = contextoCompleto();
-        when(codeReviewService.review(any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
+        when(codeReviewService.review(any(), any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
 
         agent.execute(context);
 
+        // O texto ORIGINAL do cenário entra na chamada: é a fonte contra a qual
+        // a fidelidade de contrato é conferida. A análise não serve — ela é
+        // releitura da IA e erra junto com a geração.
         verify(codeReviewService).review(
                 context.getExecutionId(), context.getProjectDiscoveryResult(), context.getScenarioAnalysisResult(),
-                context.getProjectKnowledgeResult(), context.getTechnicalPlanResult(), context.getGenerationResult()
+                context.getProjectKnowledgeResult(), context.getTechnicalPlanResult(), context.getGenerationResult(),
+                context.getScenario()
         );
     }
 
@@ -144,7 +148,7 @@ class ReviewAgentTest {
     void deveRegistrarCodeReview() {
         AutoQaContext context = contextoCompleto();
         CodeReviewResult reviewResult = sampleResult();
-        when(codeReviewService.review(any(), any(), any(), any(), any(), any())).thenReturn(reviewResult);
+        when(codeReviewService.review(any(), any(), any(), any(), any(), any(), any())).thenReturn(reviewResult);
 
         agent.execute(context);
 
@@ -155,7 +159,7 @@ class ReviewAgentTest {
     @DisplayName("Deve retornar resumo técnico com status e contagens")
     void deveRetornarResumoTecnico() {
         AutoQaContext context = contextoCompleto();
-        when(codeReviewService.review(any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
+        when(codeReviewService.review(any(), any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
 
         AgentExecutionResult result = agent.execute(context);
 
@@ -167,20 +171,24 @@ class ReviewAgentTest {
     @DisplayName("Deve retornar falha quando service lançar CodeReviewTechnicalException")
     void deveRetornarFalhaQuandoServiceFalhar() {
         AutoQaContext context = contextoCompleto();
-        when(codeReviewService.review(any(), any(), any(), any(), any(), any()))
+        when(codeReviewService.review(any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new CodeReviewTechnicalException("falha técnica"));
 
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        assertThat(result.message()).isEqualTo("Falha na revisão de código gerado");
+        // A mensagem carrega tipo e motivo: sem isso a API devolve texto
+        // genérico e o diagnóstico só existe no console do IntelliJ.
+        assertThat(result.message())
+                .startsWith("Falha na revisão de código gerado:")
+                .contains("falha técnica");
     }
 
     @Test
     @DisplayName("Deve retornar falha quando service lançar CodeReviewValidationException")
     void deveRetornarFalhaQuandoValidationException() {
         AutoQaContext context = contextoCompleto();
-        when(codeReviewService.review(any(), any(), any(), any(), any(), any()))
+        when(codeReviewService.review(any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new CodeReviewValidationException("inválido"));
 
         assertThat(agent.execute(context).success()).isFalse();
@@ -190,7 +198,7 @@ class ReviewAgentTest {
     @DisplayName("Não deve registrar resultado em caso de falha")
     void deveNaoRegistrarResultadoEmFalha() {
         AutoQaContext context = contextoCompleto();
-        when(codeReviewService.review(any(), any(), any(), any(), any(), any()))
+        when(codeReviewService.review(any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new CodeReviewTechnicalException("falha técnica"));
 
         agent.execute(context);
@@ -210,7 +218,7 @@ class ReviewAgentTest {
     @DisplayName("Não deve expor código na mensagem de sucesso")
     void deveNaoExporCodigo() {
         AutoQaContext context = contextoCompleto();
-        when(codeReviewService.review(any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
+        when(codeReviewService.review(any(), any(), any(), any(), any(), any(), any())).thenReturn(sampleResult());
 
         AgentExecutionResult result = agent.execute(context);
 

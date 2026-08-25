@@ -24,6 +24,51 @@ public class PlanningValidator {
     private static final Pattern ABSOLUTE_UNC = Pattern.compile("^\\\\\\\\");
     private static final Pattern FILE_URI = Pattern.compile("(?i)^file://");
 
+    /**
+     * Remove do início dos caminhos o nome da PRÓPRIA pasta do projeto.
+     *
+     * <p>Observado em produção: com o projeto vazio, o plano saiu com
+     * "testando-AUTO-QA/api/auth/authApiClient.ts" — o nome da raiz virou
+     * prefixo. Como os caminhos são relativos à raiz, aplicar isso criaria
+     * &lt;projeto&gt;/testando-AUTO-QA/api/... , o projeto aninhado dentro de si
+     * mesmo. É sempre errado e a correção é única, então normalizar é melhor do
+     * que derrubar a rodada inteira depois de a IA já ter sido paga.
+     *
+     * <p>Mesma família do caso ".claude/": o modelo decidindo estrutura de
+     * diretório em vez de derivá-la. A diferença é que aqui a resposta certa é
+     * calculável, e por isso o código a calcula.
+     */
+    private TechnicalPlanResult removerPrefixoRedundanteDaRaiz(TechnicalPlanResult result,
+                                                                ProjectDiscoveryResult discovery) {
+        if (discovery == null || discovery.getNormalizedProjectPath() == null) {
+            return result;
+        }
+        java.nio.file.Path nomeDaRaiz = discovery.getNormalizedProjectPath().getFileName();
+        if (nomeDaRaiz == null) {
+            return result;
+        }
+        String prefixo = nomeDaRaiz.toString() + "/";
+
+        boolean algumCorrigido = result.fileActions().stream()
+                .anyMatch(a -> a != null && a.relativePath() != null && a.relativePath().startsWith(prefixo));
+        if (!algumCorrigido) {
+            return result;
+        }
+
+        List<PlannedFileAction> corrigidas = result.fileActions().stream()
+                .map(a -> (a == null || a.relativePath() == null || !a.relativePath().startsWith(prefixo))
+                        ? a
+                        : new PlannedFileAction(a.relativePath().substring(prefixo.length()), a.operation(),
+                                a.componentType(), a.reason(), a.existingFile(), a.required(),
+                                a.approvalRequirement(), a.dependencies(), a.warnings()))
+                .toList();
+
+        return new TechnicalPlanResult(result.title(), result.strategy(), corrigidas, result.components(),
+                result.reuseDecisions(), result.risks(), result.warnings(), result.assumptions(),
+                result.constraints(), result.requiredApprovals(), result.status(), result.confidence(),
+                result.valid());
+    }
+
     public TechnicalPlanResult validate(TechnicalPlanResult result,
                                         ProjectDiscoveryResult discovery,
                                         ScenarioAnalysisResult scenario,
@@ -32,6 +77,8 @@ public class PlanningValidator {
         if (result.title() == null || result.title().isBlank()) throw new PlanningValidationException("title ausente");
         if (result.strategy() == null || result.strategy().isBlank()) throw new PlanningValidationException("strategy ausente");
         if (result.fileActions() == null) throw new PlanningValidationException("fileActions ausente");
+
+        result = removerPrefixoRedundanteDaRaiz(result, discovery);
 
         Set<String> existingPaths = knowledge != null && knowledge.components() != null
             ? knowledge.components().stream()

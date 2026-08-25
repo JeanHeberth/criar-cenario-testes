@@ -62,14 +62,24 @@ class CodeReviewValidatorTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar line inválida (zero ou negativa)")
-    void deveRejeitarLineInvalida() {
+    @DisplayName("Deve normalizar line inválida e PRESERVAR o achado")
+    void deveNormalizarLineInvalida() {
+        // Caso real: um achado com line inválida derrubava a revisão inteira,
+        // levando junto quatro erros de compilação legítimos. A linha é
+        // acessório; o defeito apontado pode ser verdadeiro.
         var issue = new ReviewIssue("CODE", ReviewCategory.CODE_QUALITY, ReviewSeverity.LOW,
                 "tests/login.spec.ts", 0, "msg", null, "rec", false);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.APPROVED_WITH_WARNINGS, ReviewStatus.APPROVED_WITH_WARNINGS, false, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        var saneada = validate(response, "tests/login.spec.ts");
+
+        assertThat(saneada.files().get(0).issues())
+                .singleElement()
+                .satisfies(i -> {
+                    assertThat(i.code()).isEqualTo("CODE");
+                    assertThat(i.line()).as("line inválida vira nula, o achado permanece").isNull();
+                });
     }
 
     @Test
@@ -245,14 +255,16 @@ class CodeReviewValidatorTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar issue nula em lista de issues")
-    void deveRejeitarIssueNula() {
+    @DisplayName("Deve descartar issue nula sem derrubar a revisão")
+    void deveDescartarIssueNula() {
         List<ReviewIssue> issues = new java.util.ArrayList<>();
         issues.add(null);
         var response = new CodeReviewAiResponse(List.of(), issues, List.of(), List.of(), List.of(), List.of(),
                 ReviewStatus.APPROVED_WITH_WARNINGS, ReviewConfidence.HIGH, false, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        var saneada = validate(response, "tests/login.spec.ts");
+
+        assertThat(saneada.globalIssues()).as("o achado inutilizável some, a revisão sobrevive").isEmpty();
     }
 
     @Test
@@ -321,14 +333,18 @@ class CodeReviewValidatorTest {
     }
 
     @Test
-    @DisplayName("Deve rejeitar issue.relativePath divergente do arquivo revisado")
-    void deveRejeitarIssueRelativePathDivergente() {
+    @DisplayName("Deve descartar issue com relativePath divergente, mantendo o resto")
+    void deveDescartarIssueComRelativePathDivergente() {
         var issue = new ReviewIssue("CODE", ReviewCategory.CODE_QUALITY, ReviewSeverity.LOW,
                 "tests/outro.spec.ts", null, "msg", null, "rec", false);
         var response = CodeReviewTestData.responseWithIssue("tests/login.spec.ts", issue,
                 FileReviewStatus.APPROVED_WITH_WARNINGS, ReviewStatus.APPROVED_WITH_WARNINGS, false, true);
 
-        assertThatThrownBy(() -> validate(response, "tests/login.spec.ts")).isInstanceOf(CodeReviewValidationException.class);
+        var saneada = validate(response, "tests/login.spec.ts");
+
+        assertThat(saneada.files().get(0).issues())
+                .as("achado que aponta outro arquivo é descartado, não derruba a revisão")
+                .isEmpty();
     }
 
     // --- helper ---

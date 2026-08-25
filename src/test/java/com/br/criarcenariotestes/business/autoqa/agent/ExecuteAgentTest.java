@@ -216,7 +216,8 @@ class ExecuteAgentTest {
         AgentExecutionResult result = agent.execute(context);
 
         assertThat(result.success()).isFalse();
-        assertThat(result.message()).isEqualTo("Falha na execução dos testes do projeto");
+        assertThat(result.message()).startsWith("Falha na execução dos testes do projeto:")
+                .as("a mensagem precisa carregar o motivo: sem ele o diagnóstico só existe no console do IntelliJ");
     }
 
     @Test

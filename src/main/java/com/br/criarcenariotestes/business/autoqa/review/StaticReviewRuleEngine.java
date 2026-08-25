@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
@@ -122,10 +123,32 @@ public class StaticReviewRuleEngine {
                                      TechnicalPlanResult plan,
                                      GenerationResult generation,
                                      List<GeneratedArtifactReader.ReadArtifact> artifacts) {
+        return review(framework, language, plan, generation, artifacts, null);
+    }
+
+    public List<ReviewIssue> review(AutomationFramework framework,
+                                     AutomationLanguage language,
+                                     TechnicalPlanResult plan,
+                                     GenerationResult generation,
+                                     List<GeneratedArtifactReader.ReadArtifact> artifacts,
+                                     VocabularioDoContrato contrato) {
+        return review(framework, language, plan, generation, artifacts, contrato, Set.of());
+    }
+
+    public List<ReviewIssue> review(AutomationFramework framework,
+                                     AutomationLanguage language,
+                                     TechnicalPlanResult plan,
+                                     GenerationResult generation,
+                                     List<GeneratedArtifactReader.ReadArtifact> artifacts,
+                                     VocabularioDoContrato contrato,
+                                     Set<String> statusDoCenario) {
         List<ReviewIssue> issues = new ArrayList<>();
         issues.addAll(reviewPlanAdherence(plan, generation));
         for (GeneratedArtifactReader.ReadArtifact artifact : artifacts) {
             issues.addAll(reviewFile(framework, language, artifact));
+            issues.addAll(reviewFidelidadeAoContrato(contrato, artifact));
+            issues.addAll(reviewSkipPorAmbiente(artifact));
+            issues.addAll(reviewStatusNaoDefinido(statusDoCenario, artifact));
         }
         issues.addAll(reviewFrameworkEvidenceNoConjunto(framework, artifacts));
         return List.copyOf(issues);
@@ -379,6 +402,163 @@ public class StaticReviewRuleEngine {
     private String extensionOf(String path) {
         int dot = path.lastIndexOf('.');
         return dot >= 0 ? path.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
+    }
+
+    /**
+     * test.skip / it.skip / describe.skip cuja condição envolve process.env,
+     * direta ou por variável carregada dele logo acima. O ".*" limitado à
+     * mesma linha evita alcançar um skip legítimo de outro trecho.
+     */
+    private static final Pattern SKIP_POR_ENV = Pattern.compile(
+            "(?m)^.*\\b(?:test|it|describe)\\.skip\\s*\\([^)\\n]*"
+                    + "(?:process\\.env|!\\s*[a-zA-Z_$][\\w$]*\\s*(?:\\|\\||,))[^)\\n]*\\).*$");
+
+    /**
+     * Status assertado, nas duas formas que aparecem na prática:
+     * {@code toBe(401)} e {@code expect([405, 404]).toContain(status())}.
+     * A segunda exige "status" na mesma linha — sem isso, qualquer literal de
+     * três dígitos num array viraria falso positivo.
+     */
+    private static final Pattern STATUS_NO_MATCHER = Pattern.compile(
+            "(?:toBe|toContain|toEqual)\\s*\\(\\s*([1-5][0-9]{2})\\b");
+    private static final Pattern STATUS_EM_LISTA = Pattern.compile(
+            "(?m)^.*\\bstatus\\b.*$");
+    private static final Pattern TRES_DIGITOS = Pattern.compile("\\b([1-5][0-9]{2})\\b");
+
+    private static final Pattern TO_MATCH_OBJECT =
+            Pattern.compile("toMatchObject\\(\\s*\\{([^}]*)\\}", Pattern.DOTALL);
+    private static final Pattern CHAVE_DE_OBJETO =
+            Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)\\s*:");
+    private static final Pattern TO_EQUAL_ARRAY =
+            Pattern.compile("toEqual\\(\\s*\\[([^\\]]*)\\]", Pattern.DOTALL);
+    private static final Pattern STRING_LITERAL =
+            Pattern.compile("[\"']([A-Za-z_][A-Za-z0-9_]*)[\"']");
+
+    /**
+     * Acusa campo assertado que o cenário nunca mencionou.
+     *
+     * <p>Observado em produção: dez testes gerados passaram em TODAS as regras
+     * estáticas e asseriam um contrato inventado — "message" onde o contrato
+     * dizia "mensagem". As regras olhavam a forma do teste, nenhuma olhava se
+     * ele falava da API certa. O erro só apareceria na execução.
+     *
+     * <p>Lê apenas duas posições sintáticas onde o nome é inequivocamente um
+     * campo de resposta: chaves de toMatchObject e literais de toEqual([...]).
+     * Property access solto (body.x) ficou de fora de propósito — pegaria
+     * response.status() e afins.
+     */
+    private List<ReviewIssue> reviewFidelidadeAoContrato(VocabularioDoContrato contrato,
+                                                          GeneratedArtifactReader.ReadArtifact artifact) {
+        if (contrato == null || !contrato.utilizavel()) {
+            return List.of();
+        }
+        String conteudo = artifact.content();
+        if (conteudo == null || conteudo.isBlank()) {
+            return List.of();
+        }
+
+        List<String> assertados = new ArrayList<>();
+        Matcher objeto = TO_MATCH_OBJECT.matcher(conteudo);
+        while (objeto.find()) {
+            Matcher chave = CHAVE_DE_OBJETO.matcher(objeto.group(1));
+            while (chave.find()) {
+                assertados.add(chave.group(1));
+            }
+        }
+        Matcher lista = TO_EQUAL_ARRAY.matcher(conteudo);
+        while (lista.find()) {
+            Matcher literal = STRING_LITERAL.matcher(lista.group(1));
+            while (literal.find()) {
+                assertados.add(literal.group(1));
+            }
+        }
+
+        List<String> desconhecidos = VocabularioDoContrato.nomesDesconhecidos(contrato, assertados);
+        if (desconhecidos.isEmpty()) {
+            return List.of();
+        }
+        return List.of(issue(ReviewRule.CONTRACT_FIELD_UNKNOWN, ReviewCategory.ASSERTION, ReviewSeverity.HIGH,
+                artifact.relativePath(), null,
+                "Teste assere campo que o cenário não menciona: " + String.join(", ", desconhecidos),
+                String.join(", ", desconhecidos),
+                "Conferir o nome contra o contrato do cenário. Campo inventado passa na revisão e falha na execução"));
+    }
+
+    /**
+     * Teste que se PULA quando falta variável de ambiente.
+     *
+     * <p>Observado no código gerado: {@code test.skip(!usuario || !senha, ...)}.
+     * Num CI sem as variáveis, a suíte reporta verde sem ter exercitado nada —
+     * falso sucesso é pior que falha, porque ninguém investiga o verde.
+     *
+     * <p>A forma correta é falhar com a causa explícita: variável ausente é
+     * defeito de configuração, não motivo para omitir a verificação.
+     */
+    private List<ReviewIssue> reviewSkipPorAmbiente(GeneratedArtifactReader.ReadArtifact artifact) {
+        String conteudo = artifact.content();
+        if (conteudo == null || conteudo.isBlank()) {
+            return List.of();
+        }
+        Matcher matcher = SKIP_POR_ENV.matcher(conteudo);
+        if (!matcher.find()) {
+            return List.of();
+        }
+        return List.of(issue(ReviewRule.SKIP_POR_AMBIENTE, ReviewCategory.TEST_DESIGN, ReviewSeverity.HIGH,
+                artifact.relativePath(), null,
+                "Teste se auto-pula quando falta variável de ambiente — a suíte reporta verde sem testar nada",
+                matcher.group().trim(),
+                "Falhar com a causa explícita em vez de pular: variável ausente é erro de configuração"));
+    }
+
+    /**
+     * Asserção de status HTTP que o cenário nunca definiu.
+     *
+     * <p>Caso real: o cenário tratava "método diferente de POST" como
+     * exploratório e o teste gerado afirmou {@code toContain([405, 404])}. A
+     * API responde 500 — o teste falharia por causa do palpite, não de um
+     * defeito real, e o vermelho apontaria para o lugar errado.
+     *
+     * <p>Só acusa quando o cenário define status suficientes para servir de
+     * referência; caso contrário se cala, como as demais regras derivadas.
+     */
+    private List<ReviewIssue> reviewStatusNaoDefinido(Set<String> statusDoCenario,
+                                                       GeneratedArtifactReader.ReadArtifact artifact) {
+        if (statusDoCenario == null || statusDoCenario.size() < 2) {
+            return List.of();
+        }
+        String conteudo = artifact.content();
+        if (conteudo == null || conteudo.isBlank()) {
+            return List.of();
+        }
+
+        List<String> inventados = new ArrayList<>();
+
+        Matcher noMatcher = STATUS_NO_MATCHER.matcher(conteudo);
+        while (noMatcher.find()) {
+            acusarSeDesconhecido(noMatcher.group(1), statusDoCenario, inventados);
+        }
+
+        Matcher linhasComStatus = STATUS_EM_LISTA.matcher(conteudo);
+        while (linhasComStatus.find()) {
+            Matcher numeros = TRES_DIGITOS.matcher(linhasComStatus.group());
+            while (numeros.find()) {
+                acusarSeDesconhecido(numeros.group(1), statusDoCenario, inventados);
+            }
+        }
+        if (inventados.isEmpty()) {
+            return List.of();
+        }
+        return List.of(issue(ReviewRule.ASSERCAO_SOBRE_COMPORTAMENTO_EXPLORATORIO, ReviewCategory.ASSERTION,
+                ReviewSeverity.HIGH, artifact.relativePath(), null,
+                "Teste assere status HTTP que o cenário não define: " + String.join(", ", inventados),
+                String.join(", ", inventados),
+                "Conferir o status contra o cenário. Comportamento não especificado vira suposição e falha na execução"));
+    }
+
+    private void acusarSeDesconhecido(String status, Set<String> statusDoCenario, List<String> inventados) {
+        if (!statusDoCenario.contains(status) && !inventados.contains(status)) {
+            inventados.add(status);
+        }
     }
 
     private ReviewIssue issue(ReviewRule rule, ReviewCategory category, ReviewSeverity severity, String relativePath,

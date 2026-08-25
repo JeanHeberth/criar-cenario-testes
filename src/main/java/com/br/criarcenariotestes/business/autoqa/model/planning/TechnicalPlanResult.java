@@ -12,8 +12,14 @@ public record TechnicalPlanResult(
     List<ReuseDecision> reuseDecisions,
     List<PlanningRisk> risks,
     List<PlanningWarning> warnings,
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+            contentUsing = com.br.criarcenariotestes.business.autoqa.model.scenario.TextoFlexivelDeserializer.class)
     List<String> assumptions,
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+            contentUsing = com.br.criarcenariotestes.business.autoqa.model.scenario.TextoFlexivelDeserializer.class)
     List<String> constraints,
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+            contentUsing = com.br.criarcenariotestes.business.autoqa.model.scenario.TextoFlexivelDeserializer.class)
     List<String> requiredApprovals,
     PlanningStatus status,
     PlanningConfidence confidence,
