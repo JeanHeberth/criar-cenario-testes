@@ -1,6 +1,8 @@
 plugins {
     id 'java'
     id 'war'
+    id 'jacoco'
+    id 'org.sonarqube' version '7.5.0.8588'
     id 'org.springframework.boot' version '3.4.4'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -73,6 +75,97 @@ processResources {
 
 test {
     useJUnitPlatform()
+    finalizedBy tasks.jacocoTestReport
+}
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+// Classes que não fazem sentido cobrir com teste unitário: ponto de entrada da
+// aplicação, config/wiring do Spring, DTOs/records e constantes.
+def coberturaClassesExcluidas = [
+        'com/br/criarcenariotestes/**/*Application.*',
+        'com/br/criarcenariotestes/config/**',
+        'com/br/criarcenariotestes/**/dto/**',
+        'com/br/criarcenariotestes/**/*Config.*',
+        'com/br/criarcenariotestes/**/*Configuration.*'
+]
+
+jacocoTestReport {
+    dependsOn tasks.test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coberturaClassesExcluidas)
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn tasks.jacocoTestReport
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coberturaClassesExcluidas)
+        }))
+    }
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'INSTRUCTION'
+                value = 'COVEREDRATIO'
+                minimum = 0.75
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.60
+            }
+        }
+    }
+}
+
+check.dependsOn tasks.jacocoTestCoverageVerification
+
+// Análise SonarQube Cloud. A URL/organização/chave ficam aqui; o token vem por
+// variável de ambiente SONAR_TOKEN (secret no CI), nunca versionado.
+// Confirme `organization` e `projectKey` no painel do SonarQube Cloud após
+// importar o repositório — os valores abaixo seguem a convenção padrão do
+// GitHub (organização = login em minúsculas, chave = <Owner>_<repo>).
+sonar {
+    properties {
+        property 'sonar.host.url', 'https://sonarcloud.io'
+        property 'sonar.organization', 'jeanheberth'
+        property 'sonar.projectKey', 'JeanHeberth_criar-cenario-testes'
+        property 'sonar.projectName', 'criar-cenario-testes'
+
+        property 'sonar.sources', 'src/main/java'
+        property 'sonar.tests', 'src/test/java'
+        property 'sonar.java.source', '21'
+
+        // Relatório de cobertura já gerado por jacocoTestReport (XML).
+        property 'sonar.coverage.jacoco.xmlReportPaths',
+                "${layout.buildDirectory.get()}/reports/jacoco/test/jacocoTestReport.xml"
+
+        // Mesmo recorte da verificação local: sem entrypoint, config e DTOs.
+        property 'sonar.coverage.exclusions', [
+                '**/*Application.java',
+                '**/config/**',
+                '**/dto/**',
+                '**/*Config.java',
+                '**/*Configuration.java'
+        ].join(',')
+    }
+}
+
+// `sonar` precisa dos .class e do XML de cobertura atualizados.
+tasks.named('sonar') {
+    dependsOn tasks.test, tasks.jacocoTestReport
 }
 
 

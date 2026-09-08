@@ -85,4 +85,72 @@ class RegrasDeTesteFragilTest {
 
         assertThat(apenas(codigo, ReviewRule.SKIP_POR_AMBIENTE)).isEmpty();
     }
+
+    /** Contrato de login: define estas mensagens, e nenhuma outra. */
+    private static final String CONTRATO = """
+            RESPOSTA 400: { "status": 400, "erro": "Erro de Validação",
+              "mensagem": "Um ou mais campos estão inválidos",
+              "campos": [ { "campo": "senha", "mensagem": "Senha é obrigatória" },
+                          { "campo": "email", "mensagem": "E-mail é obrigatório" } ] }
+            """;
+
+    private List<ReviewIssue> revisarContra(String codigo) {
+        var artifact = new GeneratedArtifactReader.ReadArtifact("tests/login.spec.ts",
+                GeneratedFileOperation.CREATE, PlanComponentType.TEST, codigo, "hash", true);
+        var plano = new TechnicalPlanResult("t", "s", List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), PlanningStatus.READY_WITH_WARNINGS,
+                PlanningConfidence.MEDIUM, true);
+        var ger = new GenerationResult(UUID.randomUUID(), "PLAYWRIGHT", "TYPESCRIPT", List.of(), List.of(),
+                List.of(), "r", "m.json", GenerationStatus.COMPLETED, GenerationConfidence.HIGH, true);
+        return engine.review(AutomationFramework.PLAYWRIGHT, AutomationLanguage.TYPESCRIPT, plano, ger,
+                List.of(artifact), VocabularioDoContrato.doTexto(CONTRATO),
+                VocabularioDoContrato.statusDefinidos(CONTRATO), CONTRATO);
+    }
+
+    @Test
+    void deveAcusarMensagemLiteralQueOContratoNaoDefine() {
+        // Caso real: o teste afirmou "E-mail deve ser um endereço de e-mail
+        // válido" e a API responde "E-mail deve ter formato válido". O contrato
+        // nunca definiu a mensagem de formato — o modelo preencheu com um texto
+        // plausível, e seis testes falharam por isso.
+        String codigo = """
+                const casos = [
+                  { name: 'sem @', expectedMessages: ['E-mail deve ser um endereço de e-mail válido'] },
+                ];
+                """;
+
+        assertThat(apenasCodigo(revisarContra(codigo), "MENSAGEM_NAO_ESPECIFICADA"))
+                .singleElement()
+                .satisfies(i -> assertThat(i.message()).contains("endereço de e-mail"));
+    }
+
+    @Test
+    void naoDeveAcusarMensagemQueOContratoDefine() {
+        String codigo = """
+                const casos = [
+                  { name: 'ausente', expectedMessages: ['E-mail é obrigatório', 'Senha é obrigatória'] },
+                ];
+                """;
+
+        assertThat(apenasCodigo(revisarContra(codigo), "MENSAGEM_NAO_ESPECIFICADA"))
+                .as("as duas estão no contrato — acusar seria falso positivo")
+                .isEmpty();
+    }
+
+    @Test
+    void naoDeveAcusarTituloDeTesteNemMensagemDeAssercao() {
+        // Título de teste e mensagem de asserção são texto do autor, não
+        // expectativa sobre a API. Acusá-los encheria o relatório de ruído.
+        String codigo = """
+                test('Deve autenticar com credenciais válidas', async () => {
+                  expect(corpo, 'Corpo da resposta deve conter token').toBeDefined();
+                });
+                """;
+
+        assertThat(apenasCodigo(revisarContra(codigo), "MENSAGEM_NAO_ESPECIFICADA")).isEmpty();
+    }
+
+    private List<ReviewIssue> apenasCodigo(List<ReviewIssue> issues, String codigo) {
+        return issues.stream().filter(i -> codigo.equals(i.code())).toList();
+    }
 }

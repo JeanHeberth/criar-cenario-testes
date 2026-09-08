@@ -16,6 +16,43 @@ pipeline {
             }
         }
 
+        stage('Testes e Cobertura') {
+            steps {
+                script {
+
+                    if (isUnix()) {
+
+                        sh '''
+                            export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+                            export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+                            chmod +x gradlew
+                            ./gradlew test jacocoTestReport jacocoTestCoverageVerification
+                        '''
+
+                    } else {
+
+                        bat '''
+                            @echo off
+
+                            set "JAVA_HOME=%JAVA_HOME_WINDOWS%"
+                            set "PATH=%JAVA_HOME%\\bin;%PATH%"
+
+                            call gradlew test jacocoTestReport jacocoTestCoverageVerification
+
+                            if errorlevel 1 exit /b %errorlevel%
+                        '''
+                    }
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'build/test-results/test/*.xml', allowEmptyResults: true
+                    archiveArtifacts artifacts: 'build/reports/jacoco/test/**', allowEmptyArchive: true
+                }
+            }
+        }
+
         stage('Build') {
             steps {
                 script {
