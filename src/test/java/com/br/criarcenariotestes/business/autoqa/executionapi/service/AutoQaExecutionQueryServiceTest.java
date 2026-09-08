@@ -34,7 +34,7 @@ class AutoQaExecutionQueryServiceTest {
     void setUp() {
         repository = mock(AutoQaExecutionRepository.class);
         mapper = new AutoQaExecutionResponseMapper();
-        service = new AutoQaExecutionQueryService(repository, mapper);
+        service = new AutoQaExecutionQueryService(repository, mapper, org.mockito.Mockito.mock(com.br.criarcenariotestes.business.autoqa.executionapi.persistence.AutoQaExecutionSnapshotRepository.class));
     }
 
     @Test

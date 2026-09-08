@@ -55,3 +55,6 @@ out/
 
 # Log de aplicação — gerado em runtime
 logs/
+
+# Configuração local do Claude Code (agents, commands, instructions, skills)
+.claude/

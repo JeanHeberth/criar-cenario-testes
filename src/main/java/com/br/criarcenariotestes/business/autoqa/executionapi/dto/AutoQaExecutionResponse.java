@@ -38,6 +38,13 @@ public record AutoQaExecutionResponse(
          * aprovação de execução usa para marcar só os comandos que fazem sentido
          * neste projeto, em vez de oferecer os onze e deixar o usuário adivinhar.
          */
-        String automationFramework
+        String automationFramework,
+
+        /**
+         * Plano técnico, quando o planejamento já rodou. Nulo antes disso.
+         * É o que o portão de aprovação precisa mostrar para a decisão deixar
+         * de ser às cegas.
+         */
+        AutoQaPublicPlan plan
 ) {
 }

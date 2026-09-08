@@ -83,8 +83,8 @@ class CodeReviewServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.executionId()).isEqualTo(executionId);
-        verify(primaryProvider).gerarResposta(any(), any());
-        verify(fallbackProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider).gerarResposta(any(), any(), any());
+        verify(fallbackProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -166,8 +166,8 @@ class CodeReviewServiceTest {
     void deveUsarFallbackEmFalhaTecnica() {
         UUID executionId = UUID.randomUUID();
         writeValidFile(executionId, "tests/login.spec.ts");
-        when(primaryProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha primário"));
-        when(fallbackProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha primário"));
+        when(fallbackProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(approvedResponse("tests/login.spec.ts"));
         when(validator.validate(any(), any(), any(), any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -175,7 +175,7 @@ class CodeReviewServiceTest {
                 GenerationTestData.completeKnowledge(), plan("tests/login.spec.ts"), generation(executionId, "tests/login.spec.ts"));
 
         assertThat(result).isNotNull();
-        verify(fallbackProvider).gerarResposta(any(), any());
+        verify(fallbackProvider).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -183,7 +183,7 @@ class CodeReviewServiceTest {
     void deveNaoUsarFallbackEmFalhaSemantica() {
         UUID executionId = UUID.randomUUID();
         writeValidFile(executionId, "tests/login.spec.ts");
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn("{}");
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn("{}");
         when(responseParser.parse(any())).thenReturn(approvedResponse("tests/login.spec.ts"));
         when(validator.validate(any(), any(), any(), any(), any(), any())).thenThrow(new CodeReviewValidationException("inválido"));
 
@@ -191,7 +191,7 @@ class CodeReviewServiceTest {
                 GenerationTestData.completeKnowledge(), plan("tests/login.spec.ts"), generation(executionId, "tests/login.spec.ts")))
                 .isInstanceOf(CodeReviewValidationException.class);
 
-        verify(fallbackProvider, never()).gerarResposta(any(), any());
+        verify(fallbackProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -199,8 +199,8 @@ class CodeReviewServiceTest {
     void deveFalharQuandoDoisProvidersFalharem() {
         UUID executionId = UUID.randomUUID();
         writeValidFile(executionId, "tests/login.spec.ts");
-        when(primaryProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha 1"));
-        when(fallbackProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha 2"));
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha 1"));
+        when(fallbackProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha 2"));
 
         assertThatThrownBy(() -> service.review(executionId, CodeReviewTestData.discovery(), CodeReviewTestData.scenario(),
                 GenerationTestData.completeKnowledge(), plan("tests/login.spec.ts"), generation(executionId, "tests/login.spec.ts")))
@@ -214,13 +214,13 @@ class CodeReviewServiceTest {
         writeValidFile(executionId, "tests/login.spec.ts");
         when(aiProviderResolver.getActiveProvider()).thenReturn(primaryProvider);
         when(aiProviderResolver.getFallbackProvider()).thenReturn(primaryProvider);
-        when(primaryProvider.gerarResposta(any(), any())).thenThrow(new RuntimeException("falha"));
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenThrow(new RuntimeException("falha"));
 
         assertThatThrownBy(() -> service.review(executionId, CodeReviewTestData.discovery(), CodeReviewTestData.scenario(),
                 GenerationTestData.completeKnowledge(), plan("tests/login.spec.ts"), generation(executionId, "tests/login.spec.ts")))
                 .isInstanceOf(CodeReviewTechnicalException.class);
 
-        verify(primaryProvider, times(1)).gerarResposta(any(), any());
+        verify(primaryProvider, times(1)).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -336,7 +336,7 @@ class CodeReviewServiceTest {
                 GenerationTestData.completeKnowledge(), plan("tests/login.spec.ts"), generation(executionId, "tests/login.spec.ts"));
 
         // Se chegou a chamar a IA (não retornou BLOCKED antes), o hash foi validado com sucesso.
-        verify(primaryProvider).gerarResposta(any(), any());
+        verify(primaryProvider).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -419,7 +419,7 @@ class CodeReviewServiceTest {
 
         assertThat(result).isNotNull();
         // discovery/scenario/knowledge nunca são passados diretamente ao provider (só o prompt textual sanitizado)
-        verify(primaryProvider).gerarResposta(any(), argThat(prompt -> !prompt.contains("/project")));
+        verify(primaryProvider).gerarResposta(any(), argThat(prompt -> !prompt.contains("/project")), any());
     }
 
     @Test
@@ -450,8 +450,8 @@ class CodeReviewServiceTest {
         service.review(executionId, CodeReviewTestData.discovery(), CodeReviewTestData.scenario(),
                 GenerationTestData.completeKnowledge(), plan("tests/login.spec.ts"), generation(executionId, "tests/login.spec.ts"));
 
-        verify(primaryProvider, times(1)).gerarResposta(any(), any());
-        verify(fallbackProvider, never()).gerarResposta(any(), any());
+        verify(primaryProvider, times(1)).gerarResposta(any(), any(), any());
+        verify(fallbackProvider, never()).gerarResposta(any(), any(), any());
     }
 
     @Test
@@ -486,7 +486,7 @@ class CodeReviewServiceTest {
     }
 
     private void stubAi(String rawResponse, CodeReviewAiResponse parsed) {
-        when(primaryProvider.gerarResposta(any(), any())).thenReturn(rawResponse);
+        when(primaryProvider.gerarResposta(any(), any(), any())).thenReturn(rawResponse);
         when(responseParser.parse(any())).thenReturn(parsed);
         when(validator.validate(any(), any(), any(), any(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
     }

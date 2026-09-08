@@ -263,4 +263,18 @@ public final class PlanningTestData {
             base.components(), base.reuseDecisions(), base.risks(), base.warnings(), base.assumptions(),
             base.constraints(), base.requiredApprovals(), base.status(), base.confidence(), base.valid());
     }
+
+    /** Conhecimento contendo um componente no caminho informado. */
+    public static ProjectKnowledgeResult knowledgeComComponente(String relativePath) {
+        ProjectKnowledgeResult base = completeKnowledge();
+        var componente = new com.br.criarcenariotestes.business.autoqa.model.knowledge.ProjectComponent(
+                relativePath, relativePath.substring(relativePath.lastIndexOf('/') + 1),
+                com.br.criarcenariotestes.business.autoqa.model.knowledge.ComponentType.API_CLIENT,
+                com.br.criarcenariotestes.business.autoqa.model.knowledge.SourceLanguage.TYPESCRIPT,
+                null, List.of(), List.of(), List.of(), List.of(), List.of(), false, true, List.of());
+        return new ProjectKnowledgeResult(base.normalizedProjectPath(), List.of(componente), base.tests(),
+                base.pageObjects(), base.fixtures(), base.helpers(), base.apiClients(), base.models(),
+                base.resources(), base.reuseCandidates(), base.namingConvention(), base.testDirectories(),
+                base.sourceDirectories(), base.ignoredDirectories(), base.warnings(), base.status(), base.valid());
+    }
 }

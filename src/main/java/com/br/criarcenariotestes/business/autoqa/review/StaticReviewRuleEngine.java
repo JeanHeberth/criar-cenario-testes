@@ -142,6 +142,17 @@ public class StaticReviewRuleEngine {
                                      List<GeneratedArtifactReader.ReadArtifact> artifacts,
                                      VocabularioDoContrato contrato,
                                      Set<String> statusDoCenario) {
+        return review(framework, language, plan, generation, artifacts, contrato, statusDoCenario, null);
+    }
+
+    public List<ReviewIssue> review(AutomationFramework framework,
+                                     AutomationLanguage language,
+                                     TechnicalPlanResult plan,
+                                     GenerationResult generation,
+                                     List<GeneratedArtifactReader.ReadArtifact> artifacts,
+                                     VocabularioDoContrato contrato,
+                                     Set<String> statusDoCenario,
+                                     String textoDoCenario) {
         List<ReviewIssue> issues = new ArrayList<>();
         issues.addAll(reviewPlanAdherence(plan, generation));
         for (GeneratedArtifactReader.ReadArtifact artifact : artifacts) {
@@ -149,6 +160,7 @@ public class StaticReviewRuleEngine {
             issues.addAll(reviewFidelidadeAoContrato(contrato, artifact));
             issues.addAll(reviewSkipPorAmbiente(artifact));
             issues.addAll(reviewStatusNaoDefinido(statusDoCenario, artifact));
+            issues.addAll(reviewMensagemNaoEspecificada(textoDoCenario, artifact));
         }
         issues.addAll(reviewFrameworkEvidenceNoConjunto(framework, artifacts));
         return List.copyOf(issues);
@@ -425,6 +437,16 @@ public class StaticReviewRuleEngine {
             "(?m)^.*\\bstatus\\b.*$");
     private static final Pattern TRES_DIGITOS = Pattern.compile("\\b([1-5][0-9]{2})\\b");
 
+    /** Propriedade com prefixo "expected": marcador idiomático de expectativa. */
+    private static final Pattern EXPECTED_PROPERTY = Pattern.compile(
+            "(?i)\\bexpected[A-Za-z]*\\s*:\\s*(\\[[^\\]]*\\]|['\"][^'\"]*['\"])");
+    /** Valor esperado passado direto ao matcher. */
+    private static final Pattern LITERAL_EM_MATCHER = Pattern.compile(
+            "\\.(?:toBe|toEqual|toContain)\\s*\\(\\s*(['\"][^'\"]*['\"])");
+    /** Texto de várias palavras — token único é valor de contrato, não mensagem. */
+    private static final Pattern STRING_MULTIPALAVRA = Pattern.compile(
+            "['\"]([^'\"]*\\s[^'\"]*)['\"]");
+
     private static final Pattern TO_MATCH_OBJECT =
             Pattern.compile("toMatchObject\\(\\s*\\{([^}]*)\\}", Pattern.DOTALL);
     private static final Pattern CHAVE_DE_OBJETO =
@@ -558,6 +580,63 @@ public class StaticReviewRuleEngine {
     private void acusarSeDesconhecido(String status, Set<String> statusDoCenario, List<String> inventados) {
         if (!statusDoCenario.contains(status) && !inventados.contains(status)) {
             inventados.add(status);
+        }
+    }
+
+    /**
+     * Acusa mensagem literal que o contrato não define.
+     *
+     * <p>Caso real: o teste afirmou "E-mail deve ser um endereço de e-mail
+     * válido" e a API responde "E-mail deve ter formato válido". O cenário
+     * nunca especificou a mensagem de formato — o modelo preencheu com um texto
+     * plausível, e seis testes falharam por isso na primeira execução.
+     *
+     * <p>Lê duas posições em que a string é inequivocamente uma EXPECTATIVA
+     * sobre a API: propriedade com prefixo "expected" e argumento de
+     * toBe/toEqual/toContain. Título de teste e mensagem de asserção ficam de
+     * fora — são texto do autor, não afirmação sobre o sistema.
+     *
+     * <p>Só entra texto de VÁRIAS palavras: token único ("Bearer", "CREATE") é
+     * valor de contrato ou enum, e acusá-lo encheria o relatório de ruído.
+     *
+     * <p>HIGH, mas deliberadamente FORA da lista de erros acionáveis do laço:
+     * regerar não ajuda quando o contrato não define a mensagem — o modelo
+     * apenas chutaria outra. Quem decide é a pessoa: ou afrouxa a asserção, ou
+     * acrescenta a mensagem ao contrato.
+     */
+    private List<ReviewIssue> reviewMensagemNaoEspecificada(String textoDoCenario,
+                                                             GeneratedArtifactReader.ReadArtifact artifact) {
+        if (textoDoCenario == null || textoDoCenario.isBlank()) {
+            return List.of();
+        }
+        String conteudo = artifact.content();
+        if (conteudo == null || conteudo.isBlank()) {
+            return List.of();
+        }
+
+        List<String> inventadas = new ArrayList<>();
+        coletarLiterais(EXPECTED_PROPERTY.matcher(conteudo), textoDoCenario, inventadas);
+        coletarLiterais(LITERAL_EM_MATCHER.matcher(conteudo), textoDoCenario, inventadas);
+
+        if (inventadas.isEmpty()) {
+            return List.of();
+        }
+        return List.of(issue(ReviewRule.MENSAGEM_NAO_ESPECIFICADA, ReviewCategory.ASSERTION,
+                ReviewSeverity.HIGH, artifact.relativePath(), null,
+                "Teste afirma mensagem que o contrato não define: " + String.join(" | ", inventadas),
+                String.join(" | ", inventadas),
+                "Conferir contra o contrato. Mensagem não especificada vira suposição e falha na execução"));
+    }
+
+    private void coletarLiterais(Matcher matcher, String textoDoCenario, List<String> destino) {
+        while (matcher.find()) {
+            Matcher literais = STRING_MULTIPALAVRA.matcher(matcher.group(1));
+            while (literais.find()) {
+                String texto = literais.group(1);
+                if (!textoDoCenario.contains(texto) && !destino.contains(texto)) {
+                    destino.add(texto);
+                }
+            }
         }
     }
 
