@@ -34,6 +34,18 @@ import java.util.stream.Collectors;
 @Service
 public class CodeReviewService {
 
+    /**
+     * A saída do review cresce com o número de arquivos revisados: cada um traz
+     * seus achados, sugestões e regras avaliadas. Revisar 5 arquivos produziu
+     * 29.458 caracteres e truncou com o teto padrão de 8000 — a resposta veio
+     * cortada no meio do JSON e a revisão falhou nos dois provedores, com as
+     * duas chamadas já pagas.
+     *
+     * <p>Teto dimensionado para uma resposta pequena reprova justamente as
+     * execuções maiores, que são as que mais precisam de revisão.
+     */
+    private static final int MAX_TOKENS_REVIEW = 16_000;
+
     private static final Logger log = LoggerFactory.getLogger(CodeReviewService.class);
 
     private final AiProviderResolver aiProviderResolver;
@@ -141,7 +153,8 @@ public class CodeReviewService {
         List<ReviewIssue> staticIssues = ruleEngine.review(
                 discovery.getAutomationFramework(), discovery.getLanguage(), plan, generation, artifacts,
                 VocabularioDoContrato.doTexto(textoDoCenario),
-                VocabularioDoContrato.statusDefinidos(textoDoCenario));
+                VocabularioDoContrato.statusDefinidos(textoDoCenario),
+                textoDoCenario);
 
         staticIssues = java.util.stream.Stream.concat(staticIssues.stream(), issuesDeCompilacao.stream()).toList();
 
@@ -231,7 +244,7 @@ public class CodeReviewService {
                                                       GenerationResult generation) {
         String response;
         try {
-            response = provider.gerarResposta(systemPrompt, userPrompt);
+            response = provider.gerarResposta(systemPrompt, userPrompt, MAX_TOKENS_REVIEW);
         } catch (RuntimeException e) {
             throw new CodeReviewTechnicalException("Falha técnica no provider " + provider.getName(), e);
         }

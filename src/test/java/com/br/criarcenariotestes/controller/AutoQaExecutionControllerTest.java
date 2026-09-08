@@ -73,7 +73,7 @@ class AutoQaExecutionControllerTest {
             return new AutoQaExecutionResponse(doc.getExecutionId(), doc.getScenarioSummary(), doc.getWorkflowStatus(),
                     doc.getCurrentStage(), doc.getLastStageStarted(), doc.getLastStageCompleted(), doc.getAttempt(),
                     doc.getProgress(), Set.of(), List.of(), List.of(), doc.getCreatedAt(), doc.getUpdatedAt(),
-                    doc.getStartedAt(), doc.getFinishedAt(), doc.getCancelledAt(), doc.getCancellationReason(), doc.getAutomationFramework());
+                    doc.getStartedAt(), doc.getFinishedAt(), doc.getCancelledAt(), doc.getCancellationReason(), doc.getAutomationFramework(), null);
         });
     }
 
@@ -296,6 +296,6 @@ class AutoQaExecutionControllerTest {
 
     private AutoQaExecutionResponse sampleResponse() {
         return new AutoQaExecutionResponse(executionId, "cenário", AutoQaWorkflowStatus.CREATED, null, null, null,
-                0, 0, Set.of(), List.of(), List.of(), Instant.now(), Instant.now(), null, null, null, null, null);
+                0, 0, Set.of(), List.of(), List.of(), Instant.now(), Instant.now(), null, null, null, null, null, null);
     }
 }

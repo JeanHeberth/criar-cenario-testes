@@ -75,9 +75,14 @@ public class ReviewAgent implements AutoQaAgent {
             // Com CHANGES_REQUIRED o apply é bloqueado. Sem os achados no log,
             // o usuário só vê "falha na aplicação de arquivos" e não tem como
             // saber o que o revisor pediu para mudar.
-            if (result.status() == com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus.CHANGES_REQUIRED) {
-                log.warn("Revisão pediu mudanças. executionId={}, issuesGlobais={}, arquivos={}",
-                        context.getExecutionId(), result.globalIssues(), result.files());
+            // BLOCKED entrou junto: antes só CHANGES_REQUIRED era detalhado, e um
+            // veredito BLOCKED — o mais grave — ficava sem rastro dos achados.
+            // Descobrir qual regra bloqueou exigia reproduzir a execução.
+            var status = result.status();
+            if (status == com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus.CHANGES_REQUIRED
+                    || status == com.br.criarcenariotestes.business.autoqa.model.review.ReviewStatus.BLOCKED) {
+                log.warn("Revisão reprovou o código. executionId={}, status={}, issuesGlobais={}, arquivos={}",
+                        context.getExecutionId(), status, result.globalIssues(), result.files());
             }
             log.info("Review agent finished. executionId={}, status={}", context.getExecutionId(), result.status());
             return AgentExecutionResult.success(buildSummary(result));

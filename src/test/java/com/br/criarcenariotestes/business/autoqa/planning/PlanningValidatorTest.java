@@ -625,4 +625,24 @@ class PlanningValidatorTest {
                 .extracting(PlannedFileAction::relativePath)
                 .containsExactly("testando-AUTO-QA-extra/x.ts");
     }
+
+    @Test
+    void deveAnexarAdvertenciaQuandoOPlanoCriaArquivoDeNomeJaExistente() {
+        // A auditoria só tem valor se o veredito chegar ao plano que o usuário
+        // aprova. Ficar no log seria o mesmo que não existir.
+        var plano = PlanningTestData.planoComCaminhos("tests/api/auth/authApiClient.ts");
+        var conhecimento = PlanningTestData.knowledgeComComponente("tests/api/shared/authApiClient.ts");
+
+        var validado = validator.validate(plano, PlanningTestData.discovery(),
+                PlanningTestData.validScenario(), conhecimento);
+
+        assertThat(validado.warnings())
+                .filteredOn(w -> "POSSIVEL_DUPLICACAO".equals(w.code()))
+                .singleElement()
+                .satisfies(w -> {
+                    assertThat(w.description()).contains("authApiClient.ts").contains("ESTENDER");
+                    assertThat(w.description()).contains("tests/api/shared/authApiClient.ts");
+                    assertThat(w.requiresHumanDecision()).isTrue();
+                });
+    }
 }

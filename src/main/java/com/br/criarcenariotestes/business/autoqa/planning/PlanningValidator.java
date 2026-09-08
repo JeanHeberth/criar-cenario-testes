@@ -16,6 +16,9 @@ import java.util.stream.Collectors;
 @Component
 public class PlanningValidator {
 
+    private final AuditoriaDeReuso auditoriaDeReuso = new AuditoriaDeReuso();
+
+
     private static final Pattern CODE_PATTERN = PadroesDeConteudoProibido.CODIGO;
     private static final Pattern COMMAND_PATTERN = PadroesDeConteudoProibido.COMANDO;
     private static final Pattern PATH_TRAVERSAL = Pattern.compile("\\.\\./");
@@ -38,6 +41,30 @@ public class PlanningValidator {
      * diretório em vez de derivá-la. A diferença é que aqui a resposta certa é
      * calculável, e por isso o código a calcula.
      */
+    /**
+     * Anexa ao plano o veredito da auditoria de reuso.
+     *
+     * <p>Vai nas advertências do próprio plano, não no log: o plano é o que o
+     * usuário lê e aprova. Um aviso que só existe no log é o mesmo que não
+     * existir para quem decide.
+     */
+    private TechnicalPlanResult anexarAuditoriaDeReuso(TechnicalPlanResult result,
+                                                        ProjectKnowledgeResult knowledge) {
+        List<PlanningWarning> daAuditoria = auditoriaDeReuso.comoAdvertencias(
+                auditoriaDeReuso.auditar(result.fileActions(),
+                        knowledge == null ? List.of() : knowledge.components()));
+        if (daAuditoria.isEmpty()) {
+            return result;
+        }
+        List<PlanningWarning> todas = java.util.stream.Stream
+                .concat(result.warnings().stream(), daAuditoria.stream())
+                .toList();
+        return new TechnicalPlanResult(result.title(), result.strategy(), result.fileActions(),
+                result.components(), result.reuseDecisions(), result.risks(), todas, result.assumptions(),
+                result.constraints(), result.requiredApprovals(), result.status(), result.confidence(),
+                result.valid());
+    }
+
     private TechnicalPlanResult removerPrefixoRedundanteDaRaiz(TechnicalPlanResult result,
                                                                 ProjectDiscoveryResult discovery) {
         if (discovery == null || discovery.getNormalizedProjectPath() == null) {
@@ -79,6 +106,7 @@ public class PlanningValidator {
         if (result.fileActions() == null) throw new PlanningValidationException("fileActions ausente");
 
         result = removerPrefixoRedundanteDaRaiz(result, discovery);
+        result = anexarAuditoriaDeReuso(result, knowledge);
 
         Set<String> existingPaths = knowledge != null && knowledge.components() != null
             ? knowledge.components().stream()
