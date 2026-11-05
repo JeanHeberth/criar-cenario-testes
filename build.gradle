@@ -3,7 +3,7 @@ plugins {
     id 'war'
     id 'jacoco'
     id 'org.sonarqube' version '7.5.0.8588'
-    id 'org.springframework.boot' version '3.4.4'
+    id 'org.springframework.boot' version '4.1.1'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -13,7 +13,7 @@ description = 'criar-cenario-testes'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(27)
     }
 }
 
@@ -36,18 +36,15 @@ dependencies {
     implementation 'me.paulschwarz:spring-dotenv:4.0.0'
     implementation 'org.apache.pdfbox:pdfbox:3.0.3'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    // SDK oficial da Anthropic. Os providers OpenAI/Gemini falam HTTP cru via
-    // RestTemplate porque foram escritos assim; para Claude usamos o SDK
-    // oficial, que já trata contrato de mensagens, thinking, stop_reason e
-    // retries sem termos que reimplementar isso à mão.
+    implementation 'org.springframework:spring-web'
     implementation 'com.anthropic:anthropic-java:2.34.0'
-    compileOnly 'org.projectlombok:lombok'
+    compileOnly 'org.projectlombok:lombok:1.18.48'
+    annotationProcessor 'org.projectlombok:lombok:1.18.48'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -79,7 +76,7 @@ test {
 }
 
 jacoco {
-    toolVersion = '0.8.12'
+    toolVersion = '0.8.16'
 }
 
 // Classes que não fazem sentido cobrir com teste unitário: ponto de entrada da
