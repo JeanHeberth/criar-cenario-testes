@@ -4,7 +4,7 @@ pipeline {
     environment {
         TOMCAT_WEBAPPS_WINDOWS = 'C:\\apache-tomcat-11.0.11\\webapps'
         TOMCAT_WEBAPPS_UNIX    = '/opt/homebrew/opt/tomcat/libexec/webapps'
-        JAVA_HOME_WINDOWS      = 'C:\\Program Files\\Java\\jdk-21.0.10'
+        JAVA_HOME_WINDOWS      = 'C:\\Program Files\\Java\\jdk-27.0.1'
     }
 
     stages {
@@ -23,7 +23,7 @@ pipeline {
                     if (isUnix()) {
 
                         sh '''
-                            export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+                            export JAVA_HOME=$(/usr/libexec/java_home -v 27)
                             export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
                             chmod +x gradlew
@@ -60,15 +60,19 @@ pipeline {
                     if (isUnix()) {
 
                         sh '''
-                            export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+                            export JAVA_HOME=$(/usr/libexec/java_home -v 27)
                             export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-                            echo "JAVA_HOME=$JAVA_HOME"
+                            echo "Java do agente Jenkins:"
                             java -version
-                            ./gradlew -version
 
-                            chmod +x gradlew
-                            ./gradlew clean build -x test
+                            echo "Versao do Gradle:"
+                            ./gradlew --version
+
+                            echo "JDKs reconhecidos pelo Gradle:"
+                            ./gradlew -q javaToolchains
+
+                            ./gradlew bootWar -x test
                         '''
 
                     } else {
@@ -79,15 +83,16 @@ pipeline {
                             set "JAVA_HOME=%JAVA_HOME_WINDOWS%"
                             set "PATH=%JAVA_HOME%\\bin;%PATH%"
 
-                            echo ==============================
-                            echo JAVA_HOME=%JAVA_HOME%
-                            where java
+                            echo Java do agente Jenkins:
                             java -version
-                            call gradlew -version
-                            echo ==============================
 
-                            call gradlew clean build -x test
+                            echo Versao do Gradle:
+                            call gradlew.bat --version
 
+                            echo JDKs reconhecidos pelo Gradle:
+                            call gradlew.bat -q javaToolchains
+
+                            call gradlew.bat bootWar -x test
                             if errorlevel 1 exit /b %errorlevel%
                         '''
                     }

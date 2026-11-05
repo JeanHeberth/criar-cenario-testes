@@ -55,7 +55,7 @@ public class ProjectScanner {
                 }
 
                 files.add(child);
-                relativeFiles.add(root.relativize(child).normalize().toString());
+                relativeFiles.add(root.relativize(child).normalize().toString().replace('\\', '/'));
             }
         } catch (IOException exception) {
             warnings.add("Falha ao ler diretório: " + safeRelativeLabel(root, current));

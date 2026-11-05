@@ -8,14 +8,12 @@ import com.br.criarcenariotestes.business.autoqa.executionapi.model.AutoQaWorkfl
 import com.br.criarcenariotestes.business.autoqa.executionapi.orchestrator.AutoQaExecutionOrchestrator;
 import com.br.criarcenariotestes.business.autoqa.executionapi.persistence.AutoQaExecutionDocument;
 import com.br.criarcenariotestes.business.autoqa.executionapi.service.AutoQaExecutionQueryService;
-import com.br.criarcenariotestes.business.autoqa.model.apply.ApplyOperation;
-import com.br.criarcenariotestes.business.autoqa.model.execution.ExecutionCommandId;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,9 +36,6 @@ class AutoQaExecutionControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @MockitoBean
     private AutoQaExecutionOrchestrator orchestrator;
