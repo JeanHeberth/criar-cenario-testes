@@ -5,10 +5,9 @@ spring:
   main:
     headless: false
 
-  data:
-    mongodb:
-      uri: ${MONGO_URI_NUVEM}
-      database: geradorcenarios
+  mongodb:
+    uri: ${MONGO_URI_NUVEM}
+    database: geradorcenarios
 
 server:
   address: 0.0.0.0
