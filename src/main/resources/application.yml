@@ -8,6 +8,8 @@ spring:
   mongodb:
     uri: ${MONGO_URI_NUVEM}
     database: geradorcenarios
+    representation:
+      uuid: java-legacy
 
 server:
   address: 0.0.0.0
