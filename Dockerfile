@@ -1,5 +1,5 @@
 # Etapa de build
-FROM gradle:8.6.0-jdk21 AS build
+FROM gradle:9.8.2-jdk27 AS build
 
 WORKDIR /app
 COPY . .
@@ -8,7 +8,7 @@ COPY . .
 RUN gradle bootJar --no-daemon
 
 # Etapa de execução (imagem mais leve)
-FROM eclipse-temurin:21-jdk
+FROM eclipse-temurin:27-jdk
 WORKDIR /app
 
 # Copia o .jar gerado para a imagem final
